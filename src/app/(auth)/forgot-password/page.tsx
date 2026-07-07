@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
               If an account exists with that email, you will receive a password reset link shortly.
             </p>
           </div>
-          <Link href="/login" className="text-sm text-[hsl(36,45%,45%)] hover:underline">
+          <Link href="/login" className="text-sm text-[hsl(220,45%,45%)] hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -71,7 +71,7 @@ export default function ForgotPasswordPage() {
 
       <p className="text-sm text-muted-foreground text-center">
         Remembered it?{' '}
-        <Link href="/login" className="text-[hsl(36,45%,45%)] hover:underline">
+        <Link href="/login" className="text-[hsl(220,45%,45%)] hover:underline">
           Sign in
         </Link>
       </p>

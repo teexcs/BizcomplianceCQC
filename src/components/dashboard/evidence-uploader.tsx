@@ -80,7 +80,7 @@ export function EvidenceUploader({ areas }: { areas: AreaOption[] }) {
 
       <label
         className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-12 text-center transition-colors cursor-pointer ${
-          busy ? 'opacity-60 pointer-events-none' : 'hover:border-[hsl(36,45%,45%)] hover:bg-muted/40'
+          busy ? 'opacity-60 pointer-events-none' : 'hover:border-[hsl(220,45%,45%)] hover:bg-muted/40'
         }`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {

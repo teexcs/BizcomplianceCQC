@@ -61,7 +61,7 @@ export function AdminSidebar({ email }: { email: string }) {
               className={cn(
                 'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors',
                 isActive
-                  ? 'text-foreground bg-accent/15 ring-1 ring-[hsl(36,45%,55%)]/30'
+                  ? 'text-foreground bg-accent/15 ring-1 ring-[hsl(220,45%,55%)]/30'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted',
               )}
             >

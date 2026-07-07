@@ -63,7 +63,7 @@ export default function FAQPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-3xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">FAQ</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">FAQ</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             Questions about the CQC audit
           </h1>

@@ -64,7 +64,7 @@ function Reveal({
 }
 
 const NAVY = 'hsl(220,50%,15%)';
-const GOLD = 'hsl(36,45%,45%)';
+const ACCENT = 'hsl(220,45%,38%)';
 
 /* ------------------------------------------------------------------ */
 /* Content                                                             */
@@ -115,7 +115,7 @@ function ScoreRing({ value }: { value: number }) {
     <div className="relative w-36 h-36" role="img" aria-label={`Readiness score ${value} out of 100`}>
       <div
         className="absolute inset-0 rounded-full"
-        style={{ background: `conic-gradient(${GOLD} 0deg ${deg}deg, hsl(220,15%,90%) ${deg}deg 360deg)` }}
+        style={{ background: `conic-gradient(${ACCENT} 0deg ${deg}deg, hsl(220,15%,90%) ${deg}deg 360deg)` }}
       />
       <div className="absolute inset-[10px] rounded-full bg-white grid place-items-center">
         <div className="text-center">
@@ -154,10 +154,10 @@ export default function HomePage() {
         {/* Layered atmosphere */}
         <div
           aria-hidden="true"
-          className="absolute inset-0"
+        className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(56rem 32rem at 82% -8%, rgba(168,133,63,0.16), transparent 60%), radial-gradient(48rem 30rem at 8% 12%, rgba(21,32,58,0.08), transparent 55%)',
+              'radial-gradient(56rem 32rem at 82% -8%, rgba(77,120,214,0.16), transparent 60%), radial-gradient(48rem 30rem at 8% 12%, rgba(21,32,58,0.08), transparent 55%)',
           }}
         />
         <div
@@ -175,14 +175,14 @@ export default function HomePage() {
         <div className="relative max-w-7xl mx-auto px-6 md:px-10 lg:px-12 pt-28 md:pt-36 pb-20 md:pb-28">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-14 lg:gap-10 items-start">
             <Reveal className="lg:col-span-7 pt-2">
-              <p className="inline-flex items-center gap-2 rounded-full border border-[hsl(36,45%,45%)]/25 bg-white/70 px-4 py-2 text-xs font-medium tracking-wide text-[hsl(220,40%,20%)] backdrop-blur">
-                <ShieldCheck size={14} className="text-[hsl(36,45%,40%)]" aria-hidden="true" />
+              <p className="inline-flex items-center gap-2 rounded-full border border-[hsl(220,45%,38%)]/25 bg-white/70 px-4 py-2 text-xs font-medium tracking-wide text-[hsl(220,40%,20%)] backdrop-blur">
+                <ShieldCheck size={14} className="text-[hsl(220,45%,38%)]" aria-hidden="true" />
                 CQC readiness for UK care providers
               </p>
 
               <h1 className="mt-7 font-display text-[2.75rem] leading-[1.05] md:text-6xl lg:text-[4.25rem] tracking-tight text-[hsl(220,33%,8%)] max-w-3xl">
                 Walk into your CQC inspection{' '}
-                <em className="not-italic md:italic text-[hsl(36,45%,38%)]">already knowing</em>{' '}
+                <em className="not-italic md:italic text-[hsl(220,45%,38%)]">already knowing</em>{' '}
                 the outcome.
               </h1>
 
@@ -202,7 +202,7 @@ export default function HomePage() {
                     <span
                       aria-hidden="true"
                       className="mt-1.5 h-1.5 w-6 rounded-full shrink-0"
-                      style={{ background: `linear-gradient(90deg, ${GOLD}, transparent)` }}
+                      style={{ background: `linear-gradient(90deg, ${ACCENT}, transparent)` }}
                     />
                     {line}
                   </li>
@@ -219,10 +219,10 @@ export default function HomePage() {
                   </span>
                 </div>
                 <div aria-hidden="true" className="hidden sm:block h-10 w-px bg-border" />
-                <Link
-                  href="/how-it-works"
-                  className="group inline-flex items-center gap-2 text-sm font-medium text-[hsl(220,40%,20%)] hover:text-[hsl(36,45%,35%)] transition-colors"
-                >
+                  <Link
+                    href="/how-it-works"
+                    className="group inline-flex items-center gap-2 text-sm font-medium text-[hsl(220,40%,20%)] hover:text-[hsl(220,45%,38%)] transition-colors"
+                  >
                   See how it works
                   <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </Link>
@@ -239,11 +239,11 @@ export default function HomePage() {
         <div className="relative border-t border-border/70 bg-white/50 backdrop-blur">
           <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12 py-4 flex flex-wrap items-center justify-center gap-x-10 gap-y-2 text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
             <span>HSCA 2008 Regulated Activities</span>
-            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(36,45%,45%)]/60" />
+            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(220,45%,38%)]/60" />
             <span>CQC Single Assessment Framework</span>
-            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(36,45%,45%)]/60" />
+            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(220,45%,38%)]/60" />
             <span>UK GDPR &amp; DPA 2018</span>
-            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(36,45%,45%)]/60" />
+            <span aria-hidden="true" className="hidden md:inline h-1 w-1 rounded-full bg-[hsl(220,45%,38%)]/60" />
             <span>Mental Capacity Act 2005</span>
           </div>
         </div>
@@ -275,10 +275,10 @@ export default function HomePage() {
       </section>
 
       {/* ================= HOW IT WORKS ================= */}
-      <section className="py-16 md:py-24 bg-[hsl(36,28%,95%)]/60 border-y border-border/60">
+      <section className="py-16 md:py-24 bg-[hsl(220,28%,95%)]/60 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
           <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,40%)] mb-4">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,38%)] mb-4">
               How it works
             </p>
             <h2 className="font-display text-3xl md:text-5xl tracking-tight max-w-2xl">
@@ -287,7 +287,7 @@ export default function HomePage() {
           </Reveal>
 
           <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-            <div aria-hidden="true" className="hidden md:block absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[hsl(36,45%,45%)]/40 to-transparent" />
+            <div aria-hidden="true" className="hidden md:block absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[hsl(220,45%,38%)]/40 to-transparent" />
             {steps.map((step, i) => (
               <Reveal key={step.n} delay={i * 110}>
                 <div className="relative rounded-2xl border border-border bg-white p-7 h-full shadow-[0_10px_40px_-18px_rgba(21,32,58,0.18)]">
@@ -309,7 +309,7 @@ export default function HomePage() {
       <section className="py-20 md:py-28">
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
           <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,40%)] mb-4">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,38%)] mb-4">
               The engine behind it
             </p>
             <h2 className="font-display text-3xl md:text-5xl tracking-tight max-w-2xl">
@@ -343,8 +343,8 @@ export default function HomePage() {
             <Reveal className="md:col-span-3" delay={90}>
               <div className="h-full rounded-2xl border border-border bg-white p-7 md:p-8 shadow-[0_10px_40px_-18px_rgba(21,32,58,0.16)]">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-[hsl(36,30%,93%)] grid place-items-center">
-                    <ListChecks size={18} className="text-[hsl(36,45%,35%)]" aria-hidden="true" />
+                    <div className="w-10 h-10 rounded-xl bg-[hsl(220,30%,93%)] grid place-items-center">
+                      <ListChecks size={18} className="text-[hsl(220,45%,35%)]" aria-hidden="true" />
                   </div>
                   <h3 className="font-display text-xl tracking-tight">Priority action plan</h3>
                 </div>
@@ -389,10 +389,10 @@ export default function HomePage() {
               },
             ].map((cell, i) => (
               <Reveal key={cell.title} className="md:col-span-3 lg:col-span-3 xl:col-span-3" delay={i * 70}>
-                <div className="h-full rounded-2xl border border-border bg-white p-6 hover:border-[hsl(36,45%,45%)]/40 hover:shadow-[0_14px_44px_-20px_rgba(21,32,58,0.22)] transition-all duration-300">
+                <div className="h-full rounded-2xl border border-border bg-white p-6 hover:border-[hsl(220,45%,38%)]/40 hover:shadow-[0_14px_44px_-20px_rgba(21,32,58,0.22)] transition-all duration-300">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-lg bg-[hsl(36,30%,93%)] grid place-items-center shrink-0">
-                      <cell.icon size={16} className="text-[hsl(36,45%,35%)]" aria-hidden="true" />
+                    <div className="w-9 h-9 rounded-lg bg-[hsl(220,30%,93%)] grid place-items-center shrink-0">
+                      <cell.icon size={16} className="text-[hsl(220,45%,35%)]" aria-hidden="true" />
                     </div>
                     <h3 className="font-display text-lg tracking-tight">{cell.title}</h3>
                   </div>
@@ -408,7 +408,7 @@ export default function HomePage() {
       <section id="areas" className="py-20 md:py-28 text-[hsl(36,33%,97%)]" style={{ background: `linear-gradient(160deg, ${NAVY} 0%, hsl(220,45%,11%) 100%)` }}>
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
           <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,50%,65%)] mb-4">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,68%)] mb-4">
               Assessed the way CQC assesses
             </p>
             <h2 className="font-display text-3xl md:text-5xl tracking-tight max-w-2xl">
@@ -424,7 +424,7 @@ export default function HomePage() {
             {keyQuestions.map((q, i) => (
               <Reveal key={q.title} delay={i * 70}>
                 <div className="h-full rounded-2xl border border-white/10 bg-white/[0.05] p-5 hover:bg-white/[0.08] transition-colors">
-                  <p className="font-display text-[hsl(36,50%,68%)] text-sm mb-2">0{i + 1}</p>
+                  <p className="font-display text-[hsl(220,50%,68%)] text-sm mb-2">0{i + 1}</p>
                   <h3 className="font-display text-xl tracking-tight mb-2">{q.title}</h3>
                   <p className="text-[13px] leading-relaxed text-[hsl(36,33%,97%)]/60">{q.desc}</p>
                 </div>
@@ -438,7 +438,7 @@ export default function HomePage() {
       <section className="py-20 md:py-28">
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
           <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,40%)] mb-4">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,38%)] mb-4">
               Pricing
             </p>
             <h2 className="font-display text-3xl md:text-5xl tracking-tight max-w-2xl">
@@ -453,9 +453,9 @@ export default function HomePage() {
                 style={{ background: `linear-gradient(150deg, ${NAVY}, hsl(220,45%,22%))` }}
               >
                 <div aria-hidden="true" className="absolute -top-20 -right-20 w-64 h-64 rounded-full"
-                  style={{ background: 'radial-gradient(closest-side, rgba(168,133,63,0.35), transparent)' }}
+                  style={{ background: 'radial-gradient(closest-side, rgba(77,120,214,0.35), transparent)' }}
                 />
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[hsl(36,50%,68%)]">
+                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[hsl(220,50%,68%)]">
                   One-off · 48 hours
                 </p>
                 <h3 className="mt-3 font-display text-2xl tracking-tight">CQC Readiness Audit</h3>
@@ -481,12 +481,12 @@ export default function HomePage() {
                     className={cn(
                       'h-full rounded-2xl border bg-white p-6 flex flex-col',
                       plan.popular
-                        ? 'border-[hsl(36,45%,45%)]/50 shadow-[0_16px_48px_-20px_rgba(168,133,63,0.4)]'
+                        ? 'border-[hsl(220,45%,38%)]/50 shadow-[0_16px_48px_-20px_rgba(77,120,214,0.4)]'
                         : 'border-border',
                     )}
                   >
                     {plan.popular ? (
-                      <span className="inline-flex items-center gap-1 self-start rounded-full bg-[hsl(36,45%,45%)]/12 text-[hsl(36,45%,32%)] text-[11px] font-bold px-2.5 py-1 mb-3">
+                      <span className="inline-flex items-center gap-1 self-start rounded-full bg-[hsl(220,45%,38%)]/12 text-[hsl(220,45%,32%)] text-[11px] font-bold px-2.5 py-1 mb-3">
                         <Sparkles size={11} aria-hidden="true" /> Most popular
                       </span>
                     ) : (
@@ -515,10 +515,10 @@ export default function HomePage() {
       </section>
 
       {/* ================= WHAT YOU RECEIVE ================= */}
-      <section className="py-20 md:py-24 bg-[hsl(36,28%,95%)]/60 border-y border-border/60">
+      <section className="py-20 md:py-24 bg-[hsl(220,28%,95%)]/60 border-y border-border/60">
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <Reveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,40%)] mb-4">
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,38%)] mb-4">
               The deliverable
             </p>
             <h2 className="font-display text-3xl md:text-4xl tracking-tight">
@@ -533,7 +533,7 @@ export default function HomePage() {
                 'The missing documents, issued to your vault with version control',
               ].map((line) => (
                 <li key={line} className="flex items-start gap-3 text-[15px] text-[hsl(220,25%,25%)]">
-                  <ShieldCheck size={17} className="text-[hsl(36,45%,40%)] mt-0.5 shrink-0" aria-hidden="true" />
+                  <ShieldCheck size={17} className="text-[hsl(220,45%,38%)] mt-0.5 shrink-0" aria-hidden="true" />
                   {line}
                 </li>
               ))}
@@ -560,7 +560,7 @@ export default function HomePage() {
               <div aria-hidden="true" className="absolute -inset-4 rounded-[1.75rem] bg-[radial-gradient(closest-side,rgba(21,32,58,0.14),transparent)] blur-xl" />
               <div className="relative rounded-xl border border-border bg-white shadow-2xl overflow-hidden">
                 <div className="px-6 py-5" style={{ background: NAVY }}>
-                  <p className="font-display text-[hsl(36,50%,68%)]">BizCompliance</p>
+                  <p className="font-display text-[hsl(220,50%,68%)]">BizCompliance</p>
                   <p className="mt-2 font-display text-xl text-white">CQC Readiness Audit</p>
                   <p className="text-xs text-white/60 mt-1">Confidential · Prepared for the registered manager</p>
                 </div>
@@ -597,11 +597,11 @@ export default function HomePage() {
               style={{ background: `linear-gradient(160deg, ${NAVY}, hsl(220,45%,10%))` }}
             >
               <div aria-hidden="true" className="absolute inset-0"
-                style={{ background: 'radial-gradient(40rem 20rem at 50% 120%, rgba(168,133,63,0.25), transparent 70%)' }}
+                style={{ background: 'radial-gradient(40rem 20rem at 50% 120%, rgba(77,120,214,0.25), transparent 70%)' }}
               />
               <div className="relative">
                 <h2 className="font-display text-3xl md:text-5xl tracking-tight">
-                  Be inspection-ready <em className="text-[hsl(36,50%,68%)]">before</em> the
+                  Be inspection-ready <em className="text-[hsl(220,50%,68%)]">before</em> the
                   inspector books the visit.
                 </h2>
                 <p className="mt-5 text-[hsl(36,33%,97%)]/70 max-w-xl mx-auto leading-relaxed">

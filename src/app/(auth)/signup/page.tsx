@@ -76,7 +76,7 @@ export default function SignupPage() {
           workspace, then sign in to start your CQC readiness journey.
         </p>
         <p className="text-sm">
-          <Link href="/login" className="text-[hsl(36,45%,45%)] hover:underline">
+          <Link href="/login" className="text-[hsl(220,45%,45%)] hover:underline">
             Back to sign in
           </Link>
         </p>
@@ -172,7 +172,7 @@ export default function SignupPage() {
 
       <p className="text-sm text-muted-foreground text-center">
         Already have an account?{' '}
-        <Link href="/login" className="text-[hsl(36,45%,45%)] hover:underline">
+        <Link href="/login" className="text-[hsl(220,45%,45%)] hover:underline">
           Sign in
         </Link>
       </p>

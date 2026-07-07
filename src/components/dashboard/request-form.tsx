@@ -106,7 +106,7 @@ export function RequestForm() {
       {type === 'Evidence review' || type === 'New document request' ? (
         <p className="text-xs text-muted-foreground">
           Tip: upload any supporting files to your{' '}
-          <a href="/dashboard/evidence" className="text-[hsl(36,45%,45%)] hover:underline">
+          <a href="/dashboard/evidence" className="text-[hsl(220,45%,45%)] hover:underline">
             evidence vault
           </a>{' '}
           and mention them here.

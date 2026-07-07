@@ -87,7 +87,7 @@ export default function ServicesPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Services</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Services</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             Everything a care provider needs to face CQC with confidence
           </h1>

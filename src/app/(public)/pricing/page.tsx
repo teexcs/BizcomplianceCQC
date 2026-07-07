@@ -76,7 +76,7 @@ export default function PricingPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-6xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">
             Pricing
           </p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
@@ -100,7 +100,7 @@ export default function PricingPage() {
                 <ul className="mt-5 grid sm:grid-cols-2 gap-x-6 gap-y-2">
                   {audit.features.map((f) => (
                     <li key={f} className="text-sm opacity-90 flex gap-2">
-                      <span aria-hidden="true" className="text-[hsl(36,45%,65%)]">
+                      <span aria-hidden="true" className="text-[hsl(220,45%,65%)]">
                         ✓
                       </span>
                       {f}
@@ -134,14 +134,14 @@ export default function PricingPage() {
               <Card
                 className={cn(
                   'h-full flex flex-col',
-                  plan.popular ? 'border-[hsl(36,45%,45%)] shadow-lg' : '',
+                  plan.popular ? 'border-[hsl(220,45%,45%)] shadow-lg' : '',
                 )}
               >
                 <CardContent className="p-6 flex flex-col flex-1">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-display text-xl">{plan.name}</h3>
                     {plan.popular ? (
-                      <Badge className="bg-[hsl(36,45%,45%)]/15 text-[hsl(36,45%,35%)]">
+                      <Badge className="bg-[hsl(220,45%,45%)]/15 text-[hsl(220,45%,35%)]">
                         Most popular
                       </Badge>
                     ) : null}
@@ -156,7 +156,7 @@ export default function PricingPage() {
                   <ul className="space-y-2 mb-6 flex-1">
                     {plan.features.map((f) => (
                       <li key={f} className="text-sm flex gap-2">
-                        <span aria-hidden="true" className="text-[hsl(36,45%,45%)]">
+                        <span aria-hidden="true" className="text-[hsl(220,45%,45%)]">
                           ✓
                         </span>
                         {f}
@@ -187,7 +187,7 @@ export default function PricingPage() {
             <ScrollReveal key={step.title} delay={i * 80}>
               <Card className="h-full border">
                 <CardContent className="p-5">
-                  <p className="font-mono text-xs text-[hsl(36,45%,45%)] mb-2">0{i + 1}</p>
+                  <p className="font-mono text-xs text-[hsl(220,45%,45%)] mb-2">0{i + 1}</p>
                   <h3 className="font-display text-lg mb-1.5">{step.title}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
                 </CardContent>

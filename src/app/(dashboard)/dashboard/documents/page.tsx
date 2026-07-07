@@ -78,7 +78,7 @@ export default async function DocumentsPage() {
                     </div>
                     <a
                       href={`/api/files/download?type=document&id=${d.id}`}
-                      className="text-xs text-[hsl(36,45%,45%)] hover:underline"
+                      className="text-xs text-[hsl(220,45%,45%)] hover:underline"
                     >
                       Download
                     </a>

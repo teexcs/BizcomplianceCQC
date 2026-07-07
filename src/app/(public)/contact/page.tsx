@@ -53,7 +53,7 @@ export default function ContactPage() {
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
           <ScrollReveal>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Contact</p>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Contact</p>
             <h1 className="font-display text-4xl md:text-5xl tracking-tight mb-6">
               Book a CQC readiness audit
             </h1>

@@ -56,7 +56,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
               className={cn(
                 'flex items-center gap-3 px-4 py-2.5 rounded-md text-sm font-medium transition-colors',
                 isActive
-                  ? 'text-foreground bg-accent/10 border-l-2 border-[hsl(36,45%,45%)]'
+                  ? 'text-foreground bg-accent/10 border-l-2 border-[hsl(220,45%,45%)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted',
               )}
             >

@@ -96,7 +96,7 @@ export default async function AccountPage() {
                   </div>
                   <a
                     href={`/api/files/download?type=report&id=${r.id}`}
-                    className="text-xs text-[hsl(36,45%,45%)] hover:underline"
+                    className="text-xs text-[hsl(220,45%,45%)] hover:underline"
                   >
                     Download PDF
                   </a>

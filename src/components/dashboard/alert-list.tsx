@@ -50,7 +50,7 @@ export function AlertList({ alerts }: { alerts: AlertRow[] }) {
           <div className="flex flex-wrap items-center gap-3">
             {!a.isRead ? (
               <span
-                className="h-2 w-2 rounded-full bg-[hsl(36,45%,45%)] shrink-0"
+                className="h-2 w-2 rounded-full bg-[hsl(220,45%,45%)] shrink-0"
                 aria-hidden="true"
               />
             ) : null}
@@ -74,7 +74,7 @@ export function AlertList({ alerts }: { alerts: AlertRow[] }) {
                 href={a.external_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[hsl(36,45%,45%)] hover:underline"
+                className="text-[hsl(220,45%,45%)] hover:underline"
               >
                 Read more
               </a>

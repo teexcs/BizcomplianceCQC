@@ -118,7 +118,7 @@ export function LibraryBrowser({ areas, assets, organisations }: Props) {
             type="button"
             disabled={busy || !orgId || selected.size === 0}
             onClick={issue}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(36,45%,55%)] to-[hsl(36,50%,38%)] text-[#111722] px-4 py-2 text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(220,45%,55%)] to-[hsl(220,50%,38%)] text-[#111722] px-4 py-2 text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-40"
           >
             <Send size={14} aria-hidden="true" /> {busy ? 'Issuing…' : 'Issue documents'}
           </button>
@@ -176,7 +176,7 @@ export function LibraryBrowser({ areas, assets, organisations }: Props) {
                 className={cn(
                   'flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors',
                   isSelected
-                    ? 'border-[hsl(36,45%,55%)]/60 bg-[hsl(36,45%,55%)]/10'
+                    ? 'border-[hsl(220,45%,55%)]/60 bg-[hsl(220,45%,55%)]/10'
                     : 'border-border bg-card hover:bg-muted/40',
                 )}
               >
@@ -184,10 +184,10 @@ export function LibraryBrowser({ areas, assets, organisations }: Props) {
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => toggle(asset.id)}
-                  className="accent-[hsl(36,45%,55%)]"
+                  className="accent-[hsl(220,45%,55%)]"
                   aria-label={`Select ${asset.ref} ${asset.title}`}
                 />
-                <span className="font-mono text-xs text-[hsl(36,60%,72%)] w-14 shrink-0">
+                <span className="font-mono text-xs text-[hsl(220,60%,72%)] w-14 shrink-0">
                   {asset.ref}
                 </span>
                 <span className="flex-1 min-w-0">
@@ -203,7 +203,7 @@ export function LibraryBrowser({ areas, assets, organisations }: Props) {
                   <a
                     href={`/api/files/download?type=library&id=${asset.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="text-xs text-[hsl(36,60%,72%)] hover:underline shrink-0"
+                    className="text-xs text-[hsl(220,60%,72%)] hover:underline shrink-0"
                   >
                     Preview
                   </a>

@@ -41,7 +41,7 @@ export default function ResourcesPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Resources</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Resources</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             Compliance library
           </h1>
@@ -61,7 +61,7 @@ export default function ResourcesPage() {
                       <span>&middot;</span>
                       <span>{article.readTime}</span>
                     </div>
-                    <h2 className="font-display text-lg font-semibold mb-2 group-hover:text-[hsl(36,45%,45%)] transition-colors">
+                    <h2 className="font-display text-lg font-semibold mb-2 group-hover:text-[hsl(220,45%,45%)] transition-colors">
                       {article.title}
                     </h2>
                     <p className="text-sm text-muted-foreground leading-relaxed">{article.desc}</p>

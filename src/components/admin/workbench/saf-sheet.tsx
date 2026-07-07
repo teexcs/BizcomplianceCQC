@@ -69,7 +69,7 @@ export function SafSheet({ questions, responses }: Props) {
             type="checkbox"
             checked={priorityOnly}
             onChange={(e) => setPriorityOnly(e.target.checked)}
-            className="accent-[hsl(36,45%,55%)]"
+            className="accent-[hsl(220,45%,55%)]"
           />
           Priority questions only
         </label>
@@ -114,7 +114,7 @@ export function SafSheet({ questions, responses }: Props) {
                                 <Star
                                   size={13}
                                   aria-label="Priority question"
-                                  className="inline mr-1.5 -mt-0.5 fill-[hsl(36,60%,60%)] text-[hsl(36,60%,60%)]"
+                                  className="inline mr-1.5 -mt-0.5 fill-[hsl(220,60%,60%)] text-[hsl(220,60%,60%)]"
                                 />
                               ) : null}
                               <span className="font-mono text-xs text-muted-foreground mr-2">

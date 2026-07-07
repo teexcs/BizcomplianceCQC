@@ -69,7 +69,7 @@ export default async function EvidencePage() {
                   )}
                   <a
                     href={`/api/files/download?type=evidence&id=${f.id}`}
-                    className="text-xs text-[hsl(36,45%,45%)] hover:underline"
+                    className="text-xs text-[hsl(220,45%,45%)] hover:underline"
                   >
                     Download
                   </a>

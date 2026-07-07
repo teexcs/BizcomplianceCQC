@@ -40,7 +40,7 @@ export default function SectorsPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Services we cover</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Services we cover</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             Built for CQC-registered care services
           </h1>
@@ -56,11 +56,11 @@ export default function SectorsPage() {
               <Link href={`/sectors/${sector.slug}`}>
                 <Card className="h-full group border hover:border-foreground/20 hover:shadow-md transition-all duration-280">
                   <CardContent className="p-6 md:p-8">
-                    <h2 className="font-display text-xl font-semibold mb-3 group-hover:text-[hsl(36,45%,45%)] transition-colors">
+                    <h2 className="font-display text-xl font-semibold mb-3 group-hover:text-[hsl(220,45%,45%)] transition-colors">
                       {sector.title}
                     </h2>
                     <p className="text-sm text-muted-foreground leading-relaxed">{sector.desc}</p>
-                    <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[hsl(36,45%,45%)] group-hover:gap-2 transition-all duration-200">
+                    <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[hsl(220,45%,45%)] group-hover:gap-2 transition-all duration-200">
                       Explore pack
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                     </div>

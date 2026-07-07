@@ -64,7 +64,7 @@ export default function CaseStudiesPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Worked examples</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Worked examples</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             What the audit finds, and how it gets fixed
           </h1>
@@ -100,9 +100,9 @@ export default function CaseStudiesPage() {
                           <p className="font-display text-2xl text-muted-foreground">{cs.scoreBefore}</p>
                           <p className="text-xs text-muted-foreground">Before</p>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-[hsl(36,45%,45%)]"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-[hsl(220,45%,45%)]"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                         <div className="text-center">
-                          <p className="font-display text-2xl text-[hsl(36,45%,45%)]">{cs.scoreAfter}</p>
+                          <p className="font-display text-2xl text-[hsl(220,45%,45%)]">{cs.scoreAfter}</p>
                           <p className="text-xs text-muted-foreground">After</p>
                         </div>
                       </div>

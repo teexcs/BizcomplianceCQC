@@ -42,7 +42,7 @@ export default async function AuditWorkbenchPage({
           </div>
           <Link
             href={`/admin/customers?org=${organisation.id}`}
-            className="text-xs text-[hsl(36,60%,72%)] hover:underline"
+            className="text-xs text-[hsl(220,60%,72%)] hover:underline"
           >
             Client record
           </Link>

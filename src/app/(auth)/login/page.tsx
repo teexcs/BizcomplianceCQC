@@ -84,13 +84,13 @@ function LoginForm() {
 
       <div className="text-center space-y-2">
         <p className="text-sm">
-          <Link href="/forgot-password" className="text-[hsl(36,45%,45%)] hover:underline">
+          <Link href="/forgot-password" className="text-[hsl(220,45%,45%)] hover:underline">
             Forgot password?
           </Link>
         </p>
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="text-[hsl(36,45%,45%)] hover:underline">
+          <Link href="/signup" className="text-[hsl(220,45%,45%)] hover:underline">
             Sign up
           </Link>
         </p>

@@ -39,12 +39,12 @@ export default async function AdminCustomersPage({
                 key={c.profile.id}
                 className={
                   highlightOrg && c.organisation?.id === highlightOrg
-                    ? 'ring-1 ring-[hsl(36,45%,55%)]/50'
+                    ? 'ring-1 ring-[hsl(220,45%,55%)]/50'
                     : undefined
                 }
               >
                 <CardContent className="py-4 flex flex-wrap items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#242b38] to-[#0d1626] grid place-items-center text-[hsl(36,60%,72%)] text-xs font-bold shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#242b38] to-[#0d1626] grid place-items-center text-[hsl(220,60%,72%)] text-xs font-bold shrink-0">
                     {(c.organisation?.name ?? c.profile.email)
                       .split(' ')
                       .map((w) => w[0])

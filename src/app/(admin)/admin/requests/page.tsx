@@ -107,7 +107,7 @@ export default async function AdminRequestsPage() {
                   <p className="mt-1.5 text-xs">
                     <a
                       href={`mailto:${m.email}`}
-                      className="text-[hsl(36,60%,72%)] hover:underline"
+                      className="text-[hsl(220,60%,72%)] hover:underline"
                     >
                       {m.name} &lt;{m.email}&gt;
                     </a>

@@ -28,7 +28,7 @@ export default async function DashboardOverviewPage() {
   if (!latest) {
     return (
       <div className="max-w-2xl mx-auto text-center py-16 space-y-6">
-        <ShieldCheck className="mx-auto text-[hsl(36,45%,45%)]" size={48} aria-hidden="true" />
+        <ShieldCheck className="mx-auto text-[hsl(220,45%,45%)]" size={48} aria-hidden="true" />
         <h1 className="font-display text-3xl tracking-tight">
           Welcome, {ctx.org.name}
         </h1>
@@ -152,7 +152,7 @@ export default async function DashboardOverviewPage() {
               <p className="text-sm text-muted-foreground py-8 text-center">
                 Your action plan appears here once the audit is delivered. In the meantime, upload
                 your policies and evidence to the{' '}
-                <Link href="/dashboard/evidence" className="text-[hsl(36,45%,45%)] hover:underline">
+                <Link href="/dashboard/evidence" className="text-[hsl(220,45%,45%)] hover:underline">
                   evidence vault
                 </Link>{' '}
                 so the review can begin.
@@ -200,7 +200,7 @@ export default async function DashboardOverviewPage() {
                 <h2 className="font-display text-lg tracking-tight">Recent documents</h2>
                 <Link
                   href="/dashboard/documents"
-                  className="text-xs text-[hsl(36,45%,45%)] hover:underline"
+                  className="text-xs text-[hsl(220,45%,45%)] hover:underline"
                 >
                   View all
                 </Link>
@@ -221,7 +221,7 @@ export default async function DashboardOverviewPage() {
                       </div>
                       <a
                         href={`/api/files/download?type=document&id=${d.id}`}
-                        className="text-xs text-[hsl(36,45%,45%)] hover:underline shrink-0"
+                        className="text-xs text-[hsl(220,45%,45%)] hover:underline shrink-0"
                       >
                         Download
                       </a>
@@ -238,7 +238,7 @@ export default async function DashboardOverviewPage() {
                 <h2 className="font-display text-lg tracking-tight">Upcoming deadlines</h2>
                 <Link
                   href="/dashboard/calendar"
-                  className="text-xs text-[hsl(36,45%,45%)] hover:underline"
+                  className="text-xs text-[hsl(220,45%,45%)] hover:underline"
                 >
                   Calendar
                 </Link>

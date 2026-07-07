@@ -44,7 +44,7 @@ export default function AboutPage() {
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12">
         {/* Founder note */}
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">About</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">About</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-12">
             Built by a UK law graduate,<br className="hidden md:block" />led by compliance specialists
           </h1>
@@ -68,7 +68,7 @@ export default function AboutPage() {
               <p className="text-lg leading-relaxed">
                 Today, our team includes compliance specialists, data protection advisors, and sector-specific experts who work together to keep our clients on the right side of regulation. We are based in London and serve businesses across the United Kingdom.
               </p>
-              <blockquote className="font-display text-xl italic text-[hsl(220,50%,15%)] border-l-2 border-[hsl(36,45%,45%)] pl-6 my-8">
+              <blockquote className="font-display text-xl italic text-[hsl(220,50%,15%)] border-l-2 border-[hsl(220,45%,45%)] pl-6 my-8">
                 &ldquo;We believe compliance is not a burden \u2014 it is a competitive advantage. Businesses that operate with integrity build stronger relationships with their customers.&rdquo;
               </blockquote>
             </div>
@@ -102,7 +102,7 @@ export default function AboutPage() {
               <Card className="h-full border">
                 <CardContent className="p-6">
                   <h3 className="font-display text-lg font-semibold mb-1">{advisor.name}</h3>
-                  <p className="text-sm text-[hsl(36,45%,45%)] mb-3">{advisor.role}</p>
+                  <p className="text-sm text-[hsl(220,45%,45%)] mb-3">{advisor.role}</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">{advisor.bio}</p>
                 </CardContent>
               </Card>

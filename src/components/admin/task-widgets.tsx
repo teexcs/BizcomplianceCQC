@@ -26,7 +26,7 @@ export function TaskCheckbox({
       checked={completed}
       disabled={busy}
       aria-label={`Mark "${title}" ${completed ? 'incomplete' : 'complete'}`}
-      className="h-4 w-4 accent-[hsl(36,45%,55%)] cursor-pointer"
+      className="h-4 w-4 accent-[hsl(220,45%,55%)] cursor-pointer"
       onChange={(e) => {
         const next = e.target.checked;
         startTransition(async () => {

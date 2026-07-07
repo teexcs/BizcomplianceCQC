@@ -72,7 +72,7 @@ export function ReportTab({ audit, reports }: Props) {
             onClick={() =>
               run(() => generateReport(audit.id), 'Report generated — review the PDF below.')
             }
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(36,45%,55%)] to-[hsl(36,50%,38%)] text-[#111722] px-4 py-2.5 text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(220,45%,55%)] to-[hsl(220,50%,38%)] text-[#111722] px-4 py-2.5 text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-50"
           >
             {busy ? (
               <RefreshCw size={15} className="animate-spin" aria-hidden="true" />
@@ -116,7 +116,7 @@ export function ReportTab({ audit, reports }: Props) {
                 )}
                 <a
                   href={`/api/files/download?type=report&id=${r.id}`}
-                  className="text-xs text-[hsl(36,60%,72%)] hover:underline"
+                  className="text-xs text-[hsl(220,60%,72%)] hover:underline"
                 >
                   View PDF
                 </a>

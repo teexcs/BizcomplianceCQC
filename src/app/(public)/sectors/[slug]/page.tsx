@@ -155,7 +155,7 @@ export default function SectorDetailPage() {
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12 text-center">
           <h1 className="font-display text-3xl mb-4">Sector not found</h1>
           <p className="text-muted-foreground mb-8">We couldn&apos;t find the sector you&apos;re looking for.</p>
-          <Link href="/sectors" className="text-[hsl(36,45%,45%)] hover:underline">View all sectors</Link>
+          <Link href="/sectors" className="text-[hsl(220,45%,45%)] hover:underline">View all sectors</Link>
         </div>
       </div>
     );
@@ -165,7 +165,7 @@ export default function SectorDetailPage() {
     <div className="py-24 md:py-32">
       <div className="max-w-4xl mx-auto px-6 md:px-10 lg:px-12">
         <ScrollReveal>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(36,45%,45%)] mb-4">Sector pack</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Sector pack</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
             {sector.title}
           </h1>
@@ -180,7 +180,7 @@ export default function SectorDetailPage() {
           <ul className="space-y-4 mb-16">
             {sector.painPoints.map((point, i) => (
               <li key={i} className="flex items-start gap-3">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-[hsl(36,45%,45%)] mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-[hsl(220,45%,45%)] mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
                 <span className="text-muted-foreground leading-relaxed">{point}</span>
               </li>
             ))}
@@ -193,7 +193,7 @@ export default function SectorDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-16">
             {sector.packIncludes.map((item, i) => (
               <div key={i} className="flex items-start gap-3 p-4 border rounded-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-[hsl(36,45%,45%)] mt-1 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-[hsl(220,45%,45%)] mt-1 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
                 <span className="text-sm">{item}</span>
               </div>
             ))}

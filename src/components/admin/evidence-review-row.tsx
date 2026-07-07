@@ -63,7 +63,7 @@ export function EvidenceReviewRow({ row }: { row: EvidenceRowData }) {
         </Badge>
         <a
           href={`/api/files/download?type=evidence&id=${row.id}`}
-          className="text-xs text-[hsl(36,60%,72%)] hover:underline"
+          className="text-xs text-[hsl(220,60%,72%)] hover:underline"
         >
           Open
         </a>

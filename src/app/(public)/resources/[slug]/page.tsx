@@ -120,7 +120,7 @@ export default function ResourceDetailPage() {
       <div className="py-24 md:py-32">
         <div className="max-w-3xl mx-auto px-6 md:px-10 lg:px-12 text-center">
           <h1 className="font-display text-3xl mb-4">Article not found</h1>
-          <Link href="/resources" className="text-[hsl(36,45%,45%)] hover:underline">Back to resources</Link>
+          <Link href="/resources" className="text-[hsl(220,45%,45%)] hover:underline">Back to resources</Link>
         </div>
       </div>
     );

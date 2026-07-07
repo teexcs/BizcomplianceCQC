@@ -118,7 +118,7 @@ export function Checklist({ items, areas, libraryAreas, auditId }: Props) {
               aria-expanded={isOpen}
               className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-muted/40 transition-colors"
             >
-              <span className="font-mono text-xs text-[hsl(36,60%,72%)] w-7 shrink-0">{la.code}</span>
+              <span className="font-mono text-xs text-[hsl(220,60%,72%)] w-7 shrink-0">{la.code}</span>
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-medium">{la.name}</span>
                 <span className="block text-xs text-muted-foreground mt-0.5">

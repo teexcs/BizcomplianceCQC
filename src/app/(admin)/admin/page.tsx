@@ -32,7 +32,7 @@ export default async function AdminCommandCentre() {
   return (
     <div className="space-y-8">
       <div>
-        <p className="text-xs uppercase tracking-[0.18em] text-[hsl(36,60%,72%)] mb-2">
+        <p className="text-xs uppercase tracking-[0.18em] text-[hsl(220,60%,72%)] mb-2">
           Founder workspace
         </p>
         <h1 className="font-display text-3xl tracking-tight">CQC audit command centre</h1>
@@ -88,7 +88,7 @@ export default async function AdminCommandCentre() {
               <h2 className="font-display text-lg tracking-tight">Audit pipeline</h2>
               <Link
                 href="/admin/audits"
-                className="text-xs text-[hsl(36,60%,72%)] hover:underline inline-flex items-center gap-1"
+                className="text-xs text-[hsl(220,60%,72%)] hover:underline inline-flex items-center gap-1"
               >
                 All audits <ArrowRight size={12} aria-hidden="true" />
               </Link>
@@ -105,7 +105,7 @@ export default async function AdminCommandCentre() {
                       href={`/admin/audits/${a.id}`}
                       className="py-3 flex items-center gap-4 hover:bg-muted/40 -mx-2 px-2 rounded-lg transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#242b38] to-[#0d1626] grid place-items-center text-[hsl(36,60%,72%)] text-xs font-bold shrink-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#242b38] to-[#0d1626] grid place-items-center text-[hsl(220,60%,72%)] text-xs font-bold shrink-0">
                         {(a.organisation?.name ?? '??')
                           .split(' ')
                           .map((w) => w[0])
@@ -139,7 +139,7 @@ export default async function AdminCommandCentre() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-display text-lg tracking-tight">Evidence review queue</h2>
-                <Link href="/admin/evidence" className="text-xs text-[hsl(36,60%,72%)] hover:underline">
+                <Link href="/admin/evidence" className="text-xs text-[hsl(220,60%,72%)] hover:underline">
                   Open queue
                 </Link>
               </div>
@@ -164,7 +164,7 @@ export default async function AdminCommandCentre() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-display text-lg tracking-tight">Open requests</h2>
-                <Link href="/admin/requests" className="text-xs text-[hsl(36,60%,72%)] hover:underline">
+                <Link href="/admin/requests" className="text-xs text-[hsl(220,60%,72%)] hover:underline">
                   All requests
                 </Link>
               </div>

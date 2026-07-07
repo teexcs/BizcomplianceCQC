@@ -40,7 +40,7 @@ export function CreateAuditButton({ organisations }: { organisations: OrgOption[
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(36,45%,55%)] to-[hsl(36,50%,38%)] text-[#111722] px-4 py-2.5 text-sm font-semibold hover:opacity-95 transition-opacity"
+        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(220,45%,55%)] to-[hsl(220,50%,38%)] text-[#111722] px-4 py-2.5 text-sm font-semibold hover:opacity-95 transition-opacity"
       >
         <Plus size={16} aria-hidden="true" /> Start new audit
       </button>
