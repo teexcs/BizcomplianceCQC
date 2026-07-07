@@ -75,12 +75,14 @@ In the Supabase dashboard → **Authentication**:
    STRIPE_PRICE_PARTNER_MONTHLY=price_xxx
    ```
 4. **Developers → API keys**: copy the secret key into `STRIPE_SECRET_KEY=sk_live_…`
-5. **Developers → Webhooks → Add endpoint**:
+5. If you want the website's one-off audit button to send people straight to your Stripe Payment Link, set:
+   `STRIPE_PAYMENT_LINK_AUDIT_ONEOFF=https://buy.stripe.com/8x2cN6eV9dhV4XxbCl0VO0b`
+6. **Developers → Webhooks → Add endpoint**:
    - URL: `https://<your-domain>/api/stripe/webhook`
    - Events: `checkout.session.completed`, `customer.subscription.updated`,
      `customer.subscription.deleted`
    - Copy the signing secret into `STRIPE_WEBHOOK_SECRET=whsec_…`
-6. **Settings → Billing → Customer portal**: click **Activate** (the dashboard's
+7. **Settings → Billing → Customer portal**: click **Activate** (the dashboard's
    "Manage billing" button uses it).
 
 When an audit is purchased the webhook automatically: records the purchase → creates the
