@@ -37,6 +37,12 @@ async function getOrCreateCustomerId(orgId: string, orgName: string, email: stri
 export async function startCheckout(planId: PlanId): Promise<{ ok: false; error: string } | never> {
   const plan = PLANS[planId];
   if (!plan) return { ok: false, error: 'Unknown plan.' };
+  if (planId === 'audit') {
+    const paymentLink = process.env.STRIPE_PAYMENT_LINK_AUDIT_ONEOFF;
+    if (paymentLink) {
+      redirect(paymentLink);
+    }
+  }
   if (!process.env.STRIPE_SECRET_KEY) {
     return { ok: false, error: 'Payments are not configured yet — please contact us to get started.' };
   }
