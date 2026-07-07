@@ -63,7 +63,7 @@ In the Supabase dashboard → **Authentication**:
 2. **Products** → create four products with GBP prices:
    | Product | Price | Type |
    |---|---|---|
-   | CQC Readiness Audit | £349 | One-off |
+   | CQC Readiness Audit | £595 | One-off |
    | Essentials | £49/month | Recurring |
    | Professional | £99/month | Recurring |
    | Partner | £249/month | Recurring |

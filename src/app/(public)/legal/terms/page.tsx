@@ -25,7 +25,7 @@ export default function LegalPage() {
 <h2>3. What we do not do</h2>
 <p>We do not provide legal advice, represent clients in legal proceedings, or guarantee specific outcomes from audit work. For legal advice on your individual circumstances, you should instruct a regulated solicitor.</p>
 <h2>4. Payment</h2>
-<p>The one-off CQC readiness audit is priced at £349 and must be paid in full before work begins.</p>
+<p>The one-off CQC readiness audit is priced at £595 and must be paid in full before work begins.</p>
 <h2>5. Intellectual property</h2>
 <p>The compliance documents we create for you become your property upon full payment. We retain the right to use anonymised learning from our work to improve our services.</p>
 <h2>6. Liability</h2>

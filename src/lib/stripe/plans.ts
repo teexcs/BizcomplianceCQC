@@ -15,7 +15,7 @@ export const PLANS: Record<PlanId, Plan> = {
   audit: {
     id: 'audit',
     name: 'CQC Readiness Audit',
-    priceGbp: 349,
+    priceGbp: 595,
     cadence: 'one-off',
     stripePriceIdEnv: 'STRIPE_PRICE_AUDIT_ONEOFF',
     description:

@@ -112,7 +112,7 @@ export default function HowItWorksPage() {
               Start with a one-off audit or choose ongoing compliance support.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
-              <CheckoutButton planId="audit" label="Book your CQC audit · £349" />
+              <CheckoutButton planId="audit" label="Book your CQC audit · £595" />
               <Link
                 href="/pricing"
                 className="inline-flex items-center justify-center rounded-md text-sm font-medium h-11 px-6 border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"

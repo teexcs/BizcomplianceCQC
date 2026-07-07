@@ -44,7 +44,7 @@ export function PublicFooter() {
             </p>
             <div className="mt-6 space-y-2 text-xs text-muted-foreground font-mono">
               <p>One-off audit only</p>
-              <p>&pound;349 personalised readiness review</p>
+              <p>&pound;595 personalised readiness review</p>
               <p>United Kingdom</p>
             </div>
           </div>
@@ -78,11 +78,11 @@ export function PublicFooter() {
               &copy; {new Date().getFullYear()} BizCompliance CQC Ltd. All rights reserved.
             </p>
             <p className="text-xs text-muted-foreground max-w-2xl md:text-right">
-              BizCompliance CQC is an independent compliance audit service. We are not the Care Quality Commission and cannot guarantee inspection outcomes. Our audits are designed to help providers identify risks, improve evidence and prepare more confidently.
+              Ready to tighten your evidence, reduce inspection-day guesswork and get a clear action plan fast? Start with the CQC Readiness Audit and turn uncertainty into a practical next step.
             </p>
           </div>
         </div>
-        </div>
+      </div>
     </footer>
   );
 }

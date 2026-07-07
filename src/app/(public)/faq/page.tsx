@@ -53,7 +53,7 @@ const faqSections = [
     items: [
       { q: 'Can you guarantee inspection outcomes?', a: 'No. BizCompliance CQC is not the Care Quality Commission and we never promise a pass or a specific result. The audit is there to improve readiness and evidence.' },
       { q: 'What happens after the report is delivered?', a: 'You receive the PDF audit report, a readiness score, risk-rated findings and a clear priority action plan. Clarification is available for 7 days after delivery.' },
-      { q: 'Do you offer subscriptions?', a: 'No. This site now offers a single one-off CQC readiness audit priced at £349.' },
+      { q: 'Do you offer subscriptions?', a: 'No. This site now offers a single one-off CQC readiness audit priced at £595.' },
     ],
   },
 ];

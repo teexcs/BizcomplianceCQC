@@ -222,7 +222,7 @@ export default function SectorDetailPage() {
         <ScrollReveal delay={250}>
           <div className="p-6 md:p-8 border rounded-xl bg-muted/30 text-center">
             <p className="text-sm text-muted-foreground mb-2">Start with the</p>
-            <Badge variant="default" className="mb-4">One-off CQC Readiness Audit · £349</Badge>
+            <Badge variant="default" className="mb-4">One-off CQC Readiness Audit · £595</Badge>
             <p className="text-sm text-muted-foreground mb-6">
               Documents for your critical gaps are issued with your audit report. Monthly plans keep
               them current and add ongoing support.
