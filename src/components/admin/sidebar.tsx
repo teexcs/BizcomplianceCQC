@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { signOut } from '@/lib/actions/auth';
+import { BrandMark } from '@/components/site/brand-mark';
 
 const navItems = [
   { label: 'Command Centre', href: '/admin', icon: LayoutDashboard },
@@ -34,18 +35,13 @@ export function AdminSidebar({ email }: { email: string }) {
   return (
     <aside className="w-64 min-h-screen border-r border-border bg-card flex flex-col">
       <div className="p-6 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl border border-[hsl(36,45%,55%)]/50 bg-gradient-to-br from-[#15100a] to-[#2a2115] grid place-items-center text-[hsl(36,60%,72%)] font-bold text-sm">
-          BC
-        </div>
         <div>
-          <Link href="/admin" className="font-display text-base font-semibold tracking-tight block">
-            BizCompliance
-          </Link>
+          <BrandMark href="/admin" className="items-start" subtitle="CQC Audit OS" />
           <Badge
             variant="outline"
             className="font-mono text-[10px] uppercase tracking-wider mt-0.5"
           >
-            CQC Audit OS
+            Operational dashboard
           </Badge>
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/lib/actions/auth';
+import { BrandMark } from '@/components/site/brand-mark';
 
 const navItems = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
@@ -37,9 +38,7 @@ export function DashboardSidebar({ user }: { user: SidebarUser }) {
   return (
     <aside className="w-64 min-h-screen bg-background border-r flex flex-col">
       <div className="p-6">
-        <Link href="/" className="font-display text-lg font-semibold tracking-tight">
-          BizCompliance CQC
-        </Link>
+        <BrandMark href="/" />
       </div>
 
       <nav className="flex-1 px-4 space-y-1" aria-label="Dashboard">

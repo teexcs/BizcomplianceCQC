@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { BrandMark } from '@/components/site/brand-mark';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -44,9 +45,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Link href="/" className="font-display text-2xl font-semibold tracking-tight">
-          BizCompliance
-        </Link>
+        <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Choose a new password</h1>
       </div>
 

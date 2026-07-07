@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { BrandMark } from '@/components/site/brand-mark';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -27,9 +28,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Link href="/" className="font-display text-2xl font-semibold tracking-tight">
-          BizCompliance
-        </Link>
+        <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Reset your password</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Enter your email and we&apos;ll send you a reset link

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
+import { BrandMark } from '@/components/site/brand-mark';
 
 function LoginForm() {
   const router = useRouter();
@@ -38,9 +39,7 @@ function LoginForm() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Link href="/" className="font-display text-2xl font-semibold tracking-tight">
-          BizCompliance
-        </Link>
+        <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Welcome back</h1>
         <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
       </div>

@@ -9,7 +9,6 @@ import {
   ClipboardCheck,
   Bell,
   ListChecks,
-  MessagesSquare,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -212,7 +211,7 @@ export default function HomePage() {
 
               <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3">
                 <div className="flex items-center gap-3">
-                  <span className="font-display text-3xl text-[hsl(220,33%,8%)]">£595</span>
+                  <span className="font-display text-3xl text-[hsl(220,33%,8%)]">£{PLANS.audit.priceGbp}</span>
                   <span className="text-sm text-muted-foreground leading-tight">
                     one-off audit
                     <br />

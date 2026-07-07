@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
+import { BrandMark } from '@/components/site/brand-mark';
 
 const SERVICE_TYPES = [
   { value: 'domiciliary-care', label: 'Domiciliary care' },
@@ -68,9 +69,7 @@ export default function SignupPage() {
   if (done) {
     return (
       <div className="space-y-6 text-center">
-        <Link href="/" className="font-display text-2xl font-semibold tracking-tight">
-          BizCompliance
-        </Link>
+        <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Check your inbox</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to activate your
@@ -88,9 +87,7 @@ export default function SignupPage() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <Link href="/" className="font-display text-2xl font-semibold tracking-tight">
-          BizCompliance
-        </Link>
+        <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Create your account</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Inspection readiness for CQC-registered care providers
