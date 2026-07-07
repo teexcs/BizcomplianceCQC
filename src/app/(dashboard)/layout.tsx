@@ -10,8 +10,13 @@ export default async function DashboardLayout({
 }) {
   const ctx = await getSessionContext();
   if (!ctx) redirect('/login?next=/dashboard');
-  if (ctx.isAdmin) redirect('/admin');
   if (!ctx.org) redirect('/login');
+
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (ctx.isAdmin && adminEmails.includes(ctx.email.toLowerCase())) redirect('/admin');
 
   const planLabel = ctx.subscription
     ? `${PLANS[ctx.subscription.plan]?.name ?? ctx.subscription.plan} plan`
