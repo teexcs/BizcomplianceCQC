@@ -70,21 +70,63 @@ export async function POST(request: Request) {
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function handleCheckoutCompleted(supabase: AdminClient, session: Stripe.Checkout.Session) {
-  const orgId = session.metadata?.org_id;
-  const planId = session.metadata?.plan_id as PlanId | undefined;
-  if (!orgId || !planId) {
-    console.error('[stripe] checkout.session.completed missing metadata', session.id);
+  let orgId = session.metadata?.org_id ?? null;
+  let planId = session.metadata?.plan_id as PlanId | undefined;
+  let org: { id: string; name: string; owner_id: string } | null = null;
+
+  if (orgId && planId) {
+    const { data } = await supabase
+      .from('organisations')
+      .select('id, name, owner_id')
+      .eq('id', orgId)
+      .maybeSingle<{ id: string; name: string; owner_id: string }>();
+    org = data ?? null;
+  }
+
+  if (!org || !orgId || !planId) {
+    const payerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+    if (payerEmail) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, org_id, email')
+        .eq('email', payerEmail)
+        .maybeSingle<{ id: string; org_id: string | null; email: string }>();
+      if (profile) {
+        if (!orgId && profile.org_id) {
+          orgId = profile.org_id;
+        }
+        if (!orgId) {
+          const { data } = await supabase
+            .from('organisations')
+            .select('id, name, owner_id')
+            .eq('owner_id', profile.id)
+            .maybeSingle<{ id: string; name: string; owner_id: string }>();
+          org = data ?? null;
+          orgId = org?.id ?? null;
+        } else if (!org) {
+          const { data } = await supabase
+            .from('organisations')
+            .select('id, name, owner_id')
+            .eq('id', orgId)
+            .maybeSingle<{ id: string; name: string; owner_id: string }>();
+          org = data ?? null;
+        }
+      }
+    }
+  }
+
+  if (!org || !orgId) {
+    console.error('[stripe] checkout.session.completed could not resolve organisation', {
+      sessionId: session.id,
+      customerEmail: session.customer_details?.email ?? session.customer_email ?? null,
+      paymentLink: session.payment_link,
+      metadata: session.metadata,
+    });
     return;
   }
 
-  const { data: org } = await supabase
-    .from('organisations')
-    .select('id, name, owner_id')
-    .eq('id', orgId)
-    .single<{ id: string; name: string; owner_id: string }>();
-  if (!org) {
-    console.error('[stripe] organisation not found for checkout', orgId);
-    return;
+  if (!planId) {
+    planId = 'audit';
   }
 
   if (session.mode === 'payment') {
