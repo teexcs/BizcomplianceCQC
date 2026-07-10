@@ -77,13 +77,9 @@ export async function processEvidenceExtraction(evidenceId: string): Promise<voi
     })
     .eq('id', evidenceId);
 
-  // Refresh the engine suggestion with content-aware matching.
-  try {
-    const { suggestForNewEvidence } = await import('@/lib/engine/autopilot');
-    await suggestForNewEvidence(evidenceId);
-  } catch (e) {
-    console.error('[evidence] rematch after extraction failed', e);
-  }
+  // Suggestions are produced by the deterministic reader when the admin runs
+  // the engine in the workbench (see src/lib/engine/reader/adapter.ts). We no
+  // longer write a fuzzy on-upload guess here — one brain, one pass.
 
   // Recompute the live score: a fresh, in-date document renews a gap and lifts
   // the number immediately (no-op unless the org has a delivered audit).
