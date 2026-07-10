@@ -4,11 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { requireAdminSession } from '@/lib/data/session';
 import { createClient } from '@/lib/supabase/server';
 import {
-  runAutopilotSuggest,
   runAutopilotApply,
   type AutopilotStats,
   type ApplyStats,
 } from '@/lib/engine/autopilot';
+import { runReaderSuggest } from '@/lib/engine/reader/adapter';
 
 export interface EngineActionResult {
   ok: boolean;
@@ -21,7 +21,7 @@ export interface EngineActionResult {
 export async function engineSuggest(auditId: string): Promise<EngineActionResult> {
   await requireAdminSession();
   try {
-    const suggest = await runAutopilotSuggest(auditId);
+    const suggest = await runReaderSuggest(auditId);
     revalidatePath(`/admin/audits/${auditId}`);
     return { ok: true, suggest };
   } catch (e) {
