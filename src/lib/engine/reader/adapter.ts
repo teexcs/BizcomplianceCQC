@@ -7,7 +7,8 @@ import type { AutopilotStats } from '@/lib/engine/autopilot';
 // edited here — treat them as a vendored, tested dependency. Typed via the
 // wrappers below.
 import { classify as classifyRaw } from './lib/classify.mjs';
-import { analyzeDocument as analyzeDocumentRaw } from './lib/analyze.mjs';
+import { analyzeDocument as analyzeDocumentRaw, analyzeSet as analyzeSetRaw } from './lib/analyze.mjs';
+import { renderMaster as renderMasterRaw } from './lib/report.mjs';
 
 /* ---------- Types mirroring the verbatim engine's output ---------- */
 
@@ -72,6 +73,32 @@ const analyzeDocument = analyzeDocumentRaw as unknown as (
   doc: IngestedDoc,
   cls: Classification,
 ) => AnalyzedDoc;
+
+/** The full analysis of a whole evidence set + its headline totals. */
+export interface AnalysisTotals {
+  filesReceived: number;
+  readable: number;
+  unreadable: number;
+  manifestTotal: number;
+  manifestSupplied: number;
+  manifestMissing: number;
+  missingLegal: number;
+  missingCqc: number;
+  criticalSignalsMet: number;
+  criticalSignalsTotal: number;
+  criticalRedFlags: number;
+  overdueDocs: number;
+}
+interface AnalyzeSetResult {
+  totals: AnalysisTotals;
+  [key: string]: unknown;
+}
+const analyzeSet = analyzeSetRaw as unknown as (ingested: {
+  root: string;
+  roots: string[];
+  docs: IngestedDoc[];
+}) => AnalyzeSetResult;
+const renderMaster = renderMasterRaw as unknown as (result: AnalyzeSetResult) => string;
 
 /* ---------- DB → engine bridge ---------- */
 
@@ -276,6 +303,41 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
   });
 
   return stats;
+}
+
+/**
+ * The INTERNAL analysis — the reader's full "everything, quoted" report for the
+ * auditor to review before issuing anything to the client. Read-only: it reads
+ * the vault's extracted text, runs the whole-set analysis, and returns the same
+ * master markdown the standalone tool writes to AUDIT_REPORT.md. Deterministic,
+ * so it can be regenerated on demand without being stored.
+ */
+export async function buildAuditAnalysis(
+  auditId: string,
+): Promise<{ markdown: string; totals: AnalysisTotals }> {
+  const admin = createAdminClient();
+
+  const { data: audit } = await admin
+    .from('audits')
+    .select('id, org_id')
+    .eq('id', auditId)
+    .single<{ id: string; org_id: string }>();
+  if (!audit) throw new Error('Audit not found');
+
+  const [{ data: org }, { data: evidence }] = await Promise.all([
+    admin.from('organisations').select('name').eq('id', audit.org_id).single<{ name: string }>(),
+    admin
+      .from('evidence_files')
+      .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
+      .eq('org_id', audit.org_id)
+      .eq('lifecycle_state', 'current')
+      .neq('scan_status', 'infected'),
+  ]);
+
+  const docs = ((evidence as EvidenceRow[]) ?? []).map(toIngestedDoc);
+  const root = org?.name ? `${org.name} — evidence vault` : 'evidence vault';
+  const result = analyzeSet({ root, roots: [root], docs });
+  return { markdown: renderMaster(result), totals: result.totals };
 }
 
 /** Small concurrency pool: fast without overwhelming the connection pooler. */

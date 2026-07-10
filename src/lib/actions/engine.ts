@@ -8,7 +8,7 @@ import {
   type AutopilotStats,
   type ApplyStats,
 } from '@/lib/engine/autopilot';
-import { runReaderSuggest } from '@/lib/engine/reader/adapter';
+import { runReaderSuggest, buildAuditAnalysis } from '@/lib/engine/reader/adapter';
 
 export interface EngineActionResult {
   ok: boolean;
@@ -27,6 +27,23 @@ export async function engineSuggest(auditId: string): Promise<EngineActionResult
   } catch (e) {
     console.error('[engine] suggest failed', e);
     return { ok: false, error: 'Engine run failed — try again.' };
+  }
+}
+
+/**
+ * Build the internal, full "everything quoted" analysis for the auditor to
+ * review (the reader's master report). Read-only — nothing is written.
+ */
+export async function getAuditAnalysis(
+  auditId: string,
+): Promise<{ ok: boolean; markdown?: string; error?: string }> {
+  await requireAdminSession();
+  try {
+    const { markdown } = await buildAuditAnalysis(auditId);
+    return { ok: true, markdown };
+  } catch (e) {
+    console.error('[engine] analysis failed', e);
+    return { ok: false, error: 'Could not build the analysis — try again.' };
   }
 }
 

@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Send, RefreshCw } from 'lucide-react';
+import { FileText, Send, RefreshCw, ClipboardCheck, Copy } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { generateReport, publishReport, setAuditSummary } from '@/lib/actions/admin';
+import { getAuditAnalysis } from '@/lib/actions/engine';
 import { formatDate } from '@/lib/utils';
 import type { Audit, Report } from '@/types/database';
 import { ClientDocumentIssuer } from './client-document-issuer';
@@ -22,6 +23,29 @@ export function ReportTab({ audit, reports, organisationName }: Props) {
   const [summary, setSummary] = useState(audit.summary ?? '');
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [busy, startTransition] = useTransition();
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function loadAnalysis() {
+    setAnalysisBusy(true);
+    setMessage(null);
+    const res = await getAuditAnalysis(audit.id);
+    setAnalysisBusy(false);
+    if (res.ok && res.markdown) setAnalysis(res.markdown);
+    else setMessage({ tone: 'error', text: res.error ?? 'Could not build the analysis.' });
+  }
+
+  async function copyAnalysis() {
+    if (!analysis) return;
+    try {
+      await navigator.clipboard.writeText(analysis);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setMessage({ tone: 'error', text: 'Copy failed — select the text and copy manually.' });
+    }
+  }
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, okText: string) {
     setMessage(null);
@@ -40,6 +64,49 @@ export function ReportTab({ audit, reports, organisationName }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg tracking-tight">Full evidence analysis (internal)</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
+              The deterministic reader&apos;s complete, quoted read of the vault — every signal found or
+              not found, red flags, expired reviews and library coverage. This is your working document:
+              review it to confirm your findings before you issue anything to the client. Not shown to
+              the client.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={analysisBusy}
+            onClick={loadAnalysis}
+            className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {analysisBusy ? (
+              <RefreshCw size={15} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <ClipboardCheck size={15} aria-hidden="true" />
+            )}
+            {analysis ? 'Rebuild analysis' : 'Build analysis'}
+          </button>
+        </div>
+        {analysis ? (
+          <div className="space-y-2">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={copyAnalysis}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+              >
+                <Copy size={12} aria-hidden="true" /> {copied ? 'Copied ✓' : 'Copy report'}
+              </button>
+            </div>
+            <pre className="max-h-[440px] overflow-auto rounded-lg border border-border bg-muted/40 p-4 text-xs whitespace-pre-wrap font-mono leading-relaxed">
+              {analysis}
+            </pre>
+          </div>
+        ) : null}
+      </div>
+
       <div className="rounded-xl border border-border bg-card p-5 space-y-3">
         <Label htmlFor="audit-summary">Executive summary (appears on page one of the report)</Label>
         <Textarea
