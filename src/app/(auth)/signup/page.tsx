@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
 import { BrandMark } from '@/components/site/brand-mark';
+import { CompanyNameField } from '@/components/site/company-name-field';
+import { BoxedDropdown } from '@/components/site/boxed-dropdown';
+import { sendWelcomeEmail } from '@/lib/actions/auth';
 
 const SERVICE_TYPES = [
   { value: 'domiciliary-care', label: 'Domiciliary care' },
@@ -19,14 +22,17 @@ const SERVICE_TYPES = [
 ];
 
 export default function SignupPage() {
+  const router = useRouter();
   const [businessName, setBusinessName] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [serviceType, setServiceType] = useState('');
+  const [otherServiceType, setOtherServiceType] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const fieldClass = 'rounded-none border-slate-300 bg-white focus-visible:ring-slate-300';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,17 +44,24 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
+    if (serviceType === 'other' && !otherServiceType.trim()) {
+      setError('Please describe your service type.');
+      setLoading(false);
+      return;
+    }
+
+    const resolvedServiceType = serviceType === 'other' ? otherServiceType.trim() : serviceType;
 
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/pricing?buy=audit`,
         data: {
           business_name: businessName,
           full_name: fullName,
-          service_type: serviceType || 'domiciliary-care',
+          service_type: resolvedServiceType || 'domiciliary-care',
         },
       },
     });
@@ -62,6 +75,17 @@ export default function SignupPage() {
       setLoading(false);
       return;
     }
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      router.push('/pricing?buy=audit');
+      router.refresh();
+      return;
+    }
+    await sendWelcomeEmail({
+      businessName: businessName || 'BizCompliance client',
+      email,
+      serviceType: resolvedServiceType || 'domiciliary-care',
+    });
     setDone(true);
     setLoading(false);
   };
@@ -72,8 +96,8 @@ export default function SignupPage() {
         <BrandMark href="/" className="items-center" />
         <h1 className="mt-6 font-display text-2xl tracking-tight">Check your inbox</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to activate your
-          workspace, then sign in to start your CQC readiness journey.
+          We&apos;ve sent a confirmation link to <strong>{email}</strong>. Confirm your email,
+          then you&apos;ll return to pricing to book the audit that unlocks the dashboard.
         </p>
         <p className="text-sm">
           <Link href="/login" className="text-[hsl(220,45%,45%)] hover:underline">
@@ -97,12 +121,13 @@ export default function SignupPage() {
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div className="space-y-2">
           <Label htmlFor="businessName">Care service / business name</Label>
-          <Input
+          <CompanyNameField
             id="businessName"
             autoComplete="organization"
             value={businessName}
-            onChange={(e) => setBusinessName(e.target.value)}
+            onValueChange={setBusinessName}
             required
+            className={fieldClass}
           />
         </div>
         <div className="space-y-2">
@@ -113,6 +138,7 @@ export default function SignupPage() {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             required
+            className={fieldClass}
           />
         </div>
         <div className="space-y-2">
@@ -125,6 +151,7 @@ export default function SignupPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="you@yourcareservice.co.uk"
+            className={fieldClass}
           />
         </div>
         <div className="space-y-2">
@@ -137,24 +164,36 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
+            className={fieldClass}
           />
           <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="serviceType">Service type</Label>
-          <Select
+          <BoxedDropdown
             id="serviceType"
             value={serviceType}
-            onChange={(e) => setServiceType(e.target.value)}
-            required
-          >
-            <option value="">Select your service type</option>
-            {SERVICE_TYPES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
+            onChange={(value) => {
+              setServiceType(value);
+              if (value !== 'other') setOtherServiceType('');
+            }}
+            options={SERVICE_TYPES}
+            placeholder="Select your service type"
+            className={fieldClass}
+          />
+          {serviceType === 'other' ? (
+            <div className="space-y-2">
+              <Label htmlFor="otherServiceType">Tell us your service</Label>
+              <Input
+                id="otherServiceType"
+                value={otherServiceType}
+                onChange={(e) => setOtherServiceType(e.target.value)}
+                required
+                placeholder="Type your service here"
+                className={fieldClass}
+              />
+            </div>
+          ) : null}
         </div>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -166,7 +205,7 @@ export default function SignupPage() {
           disabled={loading}
           className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,15%)]/90 transition-colors disabled:opacity-50"
         >
-          {loading ? 'Creating account…' : 'Create account'}
+          {loading ? 'Booking your CQC audit…' : 'Book your CQC audit'}
         </button>
       </form>
 

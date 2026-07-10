@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   ClipboardCheck,
+  CalendarDays,
   FolderSearch,
   Library,
   Users,
@@ -17,10 +18,13 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { signOut } from '@/lib/actions/auth';
 import { BrandMark } from '@/components/site/brand-mark';
+import { ViewModeCard } from '@/components/view-mode-card';
+import type { ViewMode } from '@/lib/view-mode';
 
 const navItems = [
   { label: 'Command Centre', href: '/admin', icon: LayoutDashboard },
   { label: 'Audit Pipeline', href: '/admin/audits', icon: ClipboardCheck },
+  { label: 'Calendar', href: '/admin/calendar', icon: CalendarDays },
   { label: 'Evidence Review', href: '/admin/evidence', icon: FolderSearch },
   { label: 'Library', href: '/admin/library', icon: Library },
   { label: 'Clients', href: '/admin/customers', icon: Users },
@@ -29,12 +33,20 @@ const navItems = [
   { label: 'Tasks', href: '/admin/tasks', icon: ListChecks },
 ];
 
-export function AdminSidebar({ email }: { email: string }) {
+export function AdminSidebar({
+  email,
+  viewMode,
+  showViewSwitch,
+}: {
+  email: string;
+  viewMode: ViewMode;
+  showViewSwitch: boolean;
+}) {
   const pathname = usePathname();
 
   return (
     <aside className="w-64 min-h-screen border-r border-border bg-card flex flex-col">
-      <div className="p-6 flex items-center gap-3">
+      <div className="p-6 flex items-start justify-between gap-3">
         <div>
           <BrandMark href="/admin" className="items-start" subtitle="CQC Audit OS" />
           <Badge
@@ -45,6 +57,14 @@ export function AdminSidebar({ email }: { email: string }) {
           </Badge>
         </div>
       </div>
+
+      {showViewSwitch ? (
+        <ViewModeCard
+          currentMode={viewMode}
+          switchHref={viewMode === 'client' ? '/view/admin?next=/admin' : '/view/client?next=/dashboard'}
+          className="mb-4"
+        />
+      ) : null}
 
       <nav className="flex-1 px-3 space-y-1" aria-label="Admin">
         {navItems.map((item) => {
@@ -61,7 +81,7 @@ export function AdminSidebar({ email }: { email: string }) {
               className={cn(
                 'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors',
                 isActive
-                  ? 'text-foreground bg-accent/15 ring-1 ring-[hsl(220,45%,55%)]/30'
+                  ? 'text-foreground bg-accent/15 ring-1 ring-primary/30'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted',
               )}
             >

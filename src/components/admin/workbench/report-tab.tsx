@@ -9,13 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { generateReport, publishReport, setAuditSummary } from '@/lib/actions/admin';
 import { formatDate } from '@/lib/utils';
 import type { Audit, Report } from '@/types/database';
+import { ClientDocumentIssuer } from './client-document-issuer';
 
 interface Props {
   audit: Audit;
   reports: Report[];
+  organisationName: string;
 }
 
-export function ReportTab({ audit, reports }: Props) {
+export function ReportTab({ audit, reports, organisationName }: Props) {
   const router = useRouter();
   const [summary, setSummary] = useState(audit.summary ?? '');
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -140,6 +142,12 @@ export function ReportTab({ audit, reports }: Props) {
           </ul>
         )}
       </div>
+
+      <ClientDocumentIssuer
+        auditId={audit.id}
+        auditStatus={audit.status}
+        organisationName={organisationName}
+      />
     </div>
   );
 }

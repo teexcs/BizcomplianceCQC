@@ -2,8 +2,14 @@
 
 import { redirect } from 'next/navigation';
 import { stripe } from '@/lib/stripe/client';
-import { getStripePriceId, PLANS, type PlanId } from '@/lib/stripe/plans';
+import {
+  getStripePriceIdForInterval,
+  PLANS,
+  type BillingInterval,
+  type PlanId,
+} from '@/lib/stripe/plans';
 import { getSessionContext } from '@/lib/data/session';
+import { hasCompletedAuditPurchase } from '@/lib/data/client';
 import { createClient } from '@/lib/supabase/server';
 
 // 'use server' files may only export async functions, so the sign-in sentinel
@@ -33,10 +39,20 @@ async function getOrCreateCustomerId(orgId: string, orgName: string, email: stri
   return customer.id;
 }
 
+async function canBuyMonthlyPlan(orgId: string): Promise<boolean> {
+  return hasCompletedAuditPurchase(orgId);
+}
+
 /** Creates a Stripe Checkout session and redirects the browser to it. */
-export async function startCheckout(planId: PlanId): Promise<{ ok: false; error: string } | never> {
+export async function startCheckout(
+  planId: PlanId,
+  billingCycle: BillingInterval = 'monthly',
+): Promise<{ ok: false; error: string } | never> {
   const plan = PLANS[planId];
   if (!plan) return { ok: false, error: 'Unknown plan.' };
+  if (plan.comingSoon) {
+    return { ok: false, error: `${plan.name} is coming soon — it can't be purchased yet.` };
+  }
   if (planId === 'audit') {
     const paymentLink = process.env.STRIPE_PAYMENT_LINK_AUDIT_ONEOFF;
     if (paymentLink) {
@@ -53,9 +69,16 @@ export async function startCheckout(planId: PlanId): Promise<{ ok: false; error:
   }
   const ctx = session_ctx as typeof session_ctx & { org: NonNullable<typeof session_ctx.org> };
 
+  if (planId !== 'audit' && !ctx.testAccess && !(await canBuyMonthlyPlan(ctx.org.id))) {
+    return {
+      ok: false,
+      error: 'audit-required',
+    };
+  }
+
   let priceId: string;
   try {
-    priceId = getStripePriceId(planId);
+    priceId = getStripePriceIdForInterval(planId, billingCycle);
   } catch {
     return { ok: false, error: 'This plan is not available yet — please contact us.' };
   }
@@ -68,10 +91,23 @@ export async function startCheckout(planId: PlanId): Promise<{ ok: false; error:
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${siteUrl()}/dashboard?checkout=success`,
     cancel_url: `${siteUrl()}/pricing?checkout=cancelled`,
-    metadata: { org_id: ctx.org.id, user_id: ctx.userId, plan_id: planId },
+    metadata: {
+      org_id: ctx.org.id,
+      user_id: ctx.userId,
+      plan_id: planId,
+      billing_cycle: billingCycle,
+    },
     ...(plan.cadence === 'monthly'
-      ? { subscription_data: { metadata: { org_id: ctx.org.id, plan_id: planId } } }
-      : { payment_intent_data: { metadata: { org_id: ctx.org.id, plan_id: planId } } }),
+      ? {
+          subscription_data: {
+            metadata: { org_id: ctx.org.id, plan_id: planId, billing_cycle: billingCycle },
+          },
+        }
+      : {
+          payment_intent_data: {
+            metadata: { org_id: ctx.org.id, plan_id: planId, billing_cycle: billingCycle },
+          },
+        }),
     allow_promotion_codes: true,
   });
 

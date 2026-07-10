@@ -43,13 +43,13 @@ export async function GET(request: Request) {
   } else if (type === 'document') {
     const { data } = await supabase
       .from('client_documents')
-      .select('storage_path, title, version')
+      .select('storage_path, title, version, file_name')
       .eq('id', id)
-      .maybeSingle<{ storage_path: string; title: string; version: string }>();
+      .maybeSingle<{ storage_path: string; title: string; version: string; file_name: string | null }>();
     if (data) {
       bucket = 'deliverables';
       path = data.storage_path;
-      downloadName = `${data.title} v${data.version}.docx`;
+      downloadName = data.file_name ?? `${data.title} v${data.version}.docx`;
     }
   } else if (type === 'report') {
     const { data } = await supabase

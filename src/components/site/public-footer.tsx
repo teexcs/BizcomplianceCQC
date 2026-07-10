@@ -15,6 +15,7 @@ const footerColumns = [
     links: [
       { label: 'FAQ', href: '/faq' },
       { label: 'Contact', href: '/contact' },
+      { label: 'About', href: '/about' },
     ],
   },
   {
@@ -36,7 +37,7 @@ export function PublicFooter() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           {/* Brand column */}
           <div className="lg:col-span-1">
-            <Link href="/" className="font-display text-xl font-semibold tracking-tight">
+            <Link href="/" className="font-display text-xl md:text-2xl font-semibold tracking-tight">
               BizCompliance CQC
             </Link>
             <p className="mt-4 text-sm text-muted-foreground leading-relaxed">

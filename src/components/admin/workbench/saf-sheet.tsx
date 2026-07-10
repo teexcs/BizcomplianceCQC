@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Star } from 'lucide-react';
+import { Star, Zap, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { setSafAnswer } from '@/lib/actions/admin';
@@ -151,6 +151,9 @@ export function SafSheet({ questions, responses }: Props) {
                               Evidence: {q.evidence_hint}
                             </p>
                           ) : null}
+                          {resp.answer === 'unset' && resp.suggested_answer !== 'unset' ? (
+                            <SafSuggestion resp={resp} onAccept={answer} />
+                          ) : null}
                           {resp.answer !== 'unset' ? <SafNote resp={resp} /> : null}
                         </li>
                       );
@@ -162,6 +165,34 @@ export function SafSheet({ questions, responses }: Props) {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+function SafSuggestion({
+  resp,
+  onAccept,
+}: {
+  resp: SafResponse;
+  onAccept: (resp: SafResponse, value: SafAnswer) => void;
+}) {
+  const label = ANSWER_OPTIONS.find((o) => o.value === resp.suggested_answer)?.label ?? '';
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-[11px] text-muted-foreground">
+        <Zap size={11} aria-hidden="true" />
+        Engine: {label}
+        {resp.suggestion_reason ? (
+          <span className="max-w-[360px] truncate">— {resp.suggestion_reason}</span>
+        ) : null}
+      </span>
+      <button
+        type="button"
+        onClick={() => onAccept(resp, resp.suggested_answer)}
+        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors"
+      >
+        <Check size={11} aria-hidden="true" /> Accept
+      </button>
     </div>
   );
 }

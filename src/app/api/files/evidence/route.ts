@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { getSessionContext } from '@/lib/data/session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { inferEvidenceAreaCode } from '@/lib/evidence/classify';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
 
   const form = await request.formData();
   const file = form.get('file');
-  const areaCode = (form.get('area_code') as string | null) || null;
+  const manualAreaCode = (form.get('area_code') as string | null) || null;
   const auditId = (form.get('audit_id') as string | null) || null;
 
   if (!(file instanceof File)) {
@@ -84,6 +85,9 @@ export async function POST(request: Request) {
   }
 
   const safeName = file.name.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
+  // Filename-only guess for the initial row; the async extractor re-classifies
+  // from the document's real content once it has read it.
+  const inferredAreaCode = manualAreaCode ?? inferEvidenceAreaCode(safeName);
   const storagePath = `${ctx.org.id}/${randomUUID()}-${safeName}`;
 
   const admin = createAdminClient();
@@ -99,13 +103,14 @@ export async function POST(request: Request) {
     .insert({
       org_id: ctx.org.id,
       audit_id: auditId,
-      area_code: areaCode,
+      area_code: inferredAreaCode,
       storage_path: storagePath,
       file_name: safeName,
       content_type: file.type,
       size_bytes: file.size,
       uploaded_by: ctx.userId,
       scan_status: scanStatus,
+      lifecycle_state: 'current',
     })
     .select('id')
     .single<{ id: string }>();
@@ -114,5 +119,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Upload failed — please try again.' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, id: row.id });
+  const previousQuery = admin
+    .from('evidence_files')
+    .select('id')
+    .eq('org_id', ctx.org.id)
+    .eq('lifecycle_state', 'current')
+    .eq('file_name', safeName)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  const previous = inferredAreaCode
+    ? await previousQuery.eq('area_code', inferredAreaCode).maybeSingle<{ id: string }>()
+    : await previousQuery.is('area_code', null).maybeSingle<{ id: string }>();
+
+  if (previous.data?.id) {
+    await admin
+      .from('evidence_files')
+      .update({ lifecycle_state: 'superseded', superseded_by_id: row.id })
+      .eq('id', previous.data.id);
+    await admin
+      .from('evidence_files')
+      .update({ replaces_evidence_id: previous.data.id })
+      .eq('id', row.id);
+  }
+
+  // Read the document (extract text + OCR, then content-verify) and refresh the
+  // engine match. Fired async so uploads stay fast even when a scanned PDF needs
+  // OCR; the row is 'pending' until done and the daily cron sweep is the safety
+  // net. Failure here never fails the upload.
+  void (async () => {
+    try {
+      const { processEvidenceExtraction } = await import('@/lib/evidence/process');
+      await processEvidenceExtraction(row.id);
+    } catch (e) {
+      console.error('[engine] evidence extraction failed', e);
+    }
+  })();
+
+  return NextResponse.json({ ok: true, id: row.id, replaced: previous.data?.id ?? null });
 }

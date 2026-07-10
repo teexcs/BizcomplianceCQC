@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { requireOrgSession } from '@/lib/data/session';
-import { getPublishedReports } from '@/lib/data/client';
+import { getPublishedReports, getSocialProfiles, hasCompletedAuditPurchase } from '@/lib/data/client';
 import { PLANS } from '@/lib/stripe/plans';
 import { formatDate } from '@/lib/utils';
 import {
@@ -10,13 +10,18 @@ import {
   ProfileForm,
   BillingPortalButton,
 } from '@/components/dashboard/account-forms';
+import { SocialProfilesForm } from '@/components/dashboard/social-profiles-form';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AccountPage() {
   const ctx = await requireOrgSession();
-  const reports = await getPublishedReports(ctx.org.id);
-  const plan = ctx.subscription ? PLANS[ctx.subscription.plan] : null;
+  const [reports, socialProfiles, auditPurchased] = await Promise.all([
+    getPublishedReports(ctx.org.id),
+    getSocialProfiles(ctx.org.id),
+    hasCompletedAuditPurchase(ctx.org.id),
+  ]);
+  const plan = ctx.testAccess ? PLANS.partner : ctx.subscription ? PLANS[ctx.subscription.plan] : null;
 
   return (
     <div className="space-y-8">
@@ -31,7 +36,9 @@ export default async function AccountPage() {
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h2 className="font-display text-lg tracking-tight">Subscription</h2>
-            {ctx.subscription ? (
+            {ctx.testAccess ? (
+              <Badge className="bg-purple-100 text-purple-800">Test access</Badge>
+            ) : ctx.subscription ? (
               <Badge
                 className={
                   ctx.subscription.status === 'active' || ctx.subscription.status === 'trialing'
@@ -45,7 +52,23 @@ export default async function AccountPage() {
               <Badge variant="outline">No active plan</Badge>
             )}
           </div>
-          {plan && ctx.subscription ? (
+          {ctx.testAccess ? (
+            <div className="space-y-3">
+              <p className="text-sm">
+                <span className="font-medium">{plan?.name ?? 'Partner'}</span> test access is
+                enabled for this account, so you can exercise all locked features without paying.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                This override is only active for your testing email.
+              </p>
+              <Link
+                href="/pricing?change=1"
+                className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                Change plan
+              </Link>
+            </div>
+          ) : plan && ctx.subscription ? (
             <div className="space-y-3">
               <p className="text-sm">
                 <span className="font-medium">{plan.name}</span> — £{plan.priceGbp}/month
@@ -54,7 +77,15 @@ export default async function AccountPage() {
                   : ''}
                 {ctx.subscription.cancel_at_period_end ? ' · cancels at period end' : ''}
               </p>
-              <BillingPortalButton />
+              <div className="flex flex-wrap gap-3">
+                <BillingPortalButton />
+                <Link
+                  href="/pricing?change=1"
+                  className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
+                >
+                  Change plan
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -63,12 +94,21 @@ export default async function AccountPage() {
                 adds the compliance calendar and regulatory alerts, and covers ongoing document
                 requests.
               </p>
-              <Link
-                href="/pricing"
-                className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-6 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,15%)]/90 transition-colors"
-              >
-                View plans
-              </Link>
+              {auditPurchased ? (
+                <Link
+                  href="/pricing?change=1"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-6 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,15%)]/90 transition-colors"
+                >
+                  Change plan
+                </Link>
+              ) : (
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-6 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,15%)]/90 transition-colors"
+                >
+                  Book audit first
+                </Link>
+              )}
             </div>
           )}
         </CardContent>
@@ -123,6 +163,13 @@ export default async function AccountPage() {
               postcode: ctx.org.postcode ?? '',
             }}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <h2 className="font-display text-lg tracking-tight mb-4">Social profiles & public accounts</h2>
+          <SocialProfilesForm initialProfiles={socialProfiles} />
         </CardContent>
       </Card>
 

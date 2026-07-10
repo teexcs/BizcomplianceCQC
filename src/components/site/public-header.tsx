@@ -32,7 +32,7 @@ export function PublicHeader() {
       className={cn(
         'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
         scrolled
-          ? 'bg-[hsl(36,33%,97%)]/85 backdrop-blur-xl border-b border-border shadow-[0_1px_0_rgba(21,32,58,0.04)]'
+          ? 'bg-background/85 backdrop-blur-xl border-b border-border shadow-[0_1px_0_rgba(21,32,58,0.04)]'
           : 'bg-transparent',
       )}
     >
@@ -63,10 +63,10 @@ export function PublicHeader() {
               Sign in
             </Link>
             <Link
-              href="/#start"
-              className="inline-flex items-center justify-center rounded-lg text-sm font-semibold h-10 px-5 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,20%)] transition-colors shadow-[0_8px_24px_-10px_rgba(21,32,58,0.5)]"
+              href="/pricing"
+              className="inline-flex items-center justify-center rounded-lg text-sm font-semibold h-10 px-5 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-[0_8px_24px_-10px_rgba(21,32,58,0.5)]"
             >
-              Get started free
+              Book your CQC audit
             </Link>
           </div>
 
@@ -104,11 +104,11 @@ export function PublicHeader() {
                 Sign in
               </Link>
               <Link
-                href="/#start"
+                href="/pricing"
                 onClick={() => setMobileOpen(false)}
-                className="inline-flex items-center justify-center rounded-lg text-sm font-semibold h-11 px-5 bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,20%)] transition-colors"
+                className="inline-flex items-center justify-center rounded-lg text-sm font-semibold h-11 px-5 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                Get started free
+                Book your CQC audit
               </Link>
             </div>
           </nav>

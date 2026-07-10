@@ -31,6 +31,7 @@ interface Props {
   safResponses: SafResponse[];
   findings: AuditFinding[];
   reports: Report[];
+  organisationName: string;
 }
 
 const STATUSES: AuditStatus[] = [
@@ -117,7 +118,7 @@ export function Workbench(props: Props) {
           />
         </TabsContent>
         <TabsContent value="report" activeValue={tab} className="mt-5">
-          <ReportTab audit={props.audit} reports={props.reports} />
+          <ReportTab audit={props.audit} reports={props.reports} organisationName={props.organisationName} />
         </TabsContent>
       </Tabs>
     </div>

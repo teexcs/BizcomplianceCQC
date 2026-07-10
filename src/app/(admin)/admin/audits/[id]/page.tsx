@@ -51,6 +51,7 @@ export default async function AuditWorkbenchPage({
 
       <Workbench
         audit={audit}
+        organisationName={organisation.name}
         items={bundle.items}
         areas={bundle.areas}
         libraryAreas={bundle.libraryAreas}

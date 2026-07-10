@@ -28,7 +28,7 @@ function ScrollReveal({ children, className, delay = 0 }: { children: React.Reac
 }
 
 const sectors = [
-  { slug: 'domiciliary-care', title: 'Domiciliary care', desc: 'Lone working, medicines in the home, Schedule 3 recruitment files and travel-buffered rotas — our deepest pack, built on 139 documents across 18 areas.', icon: '' },
+  { slug: 'domiciliary-care', title: 'Domiciliary care', desc: 'Lone working, medicines in the home, Schedule 3 recruitment files and travel-buffered rotas — our deepest pack, built for all 18 CQC areas.', icon: '' },
   { slug: 'supported-living', title: 'Supported living', desc: 'Mental capacity, best-interests decisions, positive risk-taking and genuinely person-centred planning evidence.', icon: '' },
   { slug: 'care-home', title: 'Residential care homes', desc: 'Premises safety, IPC, dependency-based staffing, controlled drugs governance and the full medicines cycle.', icon: '' },
   { slug: 'clinic', title: 'Clinics & treatment services', desc: 'Consent records, duty of candour, statutory notifications and governance for independent healthcare.', icon: '' },

@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { CompanyNameField } from '@/components/site/company-name-field';
+import { BoxedDropdown } from '@/components/site/boxed-dropdown';
 import { updateOrganisation, updateProfile } from '@/lib/actions/client';
 import { openBillingPortal } from '@/lib/actions/billing';
 
@@ -33,6 +34,13 @@ export interface OrgFormValues {
 export function OrganisationForm({ initial }: { initial: OrgFormValues }) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
+  const initialServiceType = SERVICE_TYPES.some((item) => item.value === initial.service_type)
+    ? initial.service_type
+    : 'other';
+  const [serviceType, setServiceType] = useState(initialServiceType);
+  const [otherServiceType, setOtherServiceType] = useState(
+    initialServiceType === 'other' ? initial.service_type : '',
+  );
   const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -43,7 +51,13 @@ export function OrganisationForm({ initial }: { initial: OrgFormValues }) {
     e.preventDefault();
     setLoading(true);
     setStatus(null);
-    const result = await updateOrganisation(values);
+    if (serviceType === 'other' && !otherServiceType.trim()) {
+      setStatus({ tone: 'error', text: 'Please describe your service type.' });
+      setLoading(false);
+      return;
+    }
+    const resolvedServiceType = serviceType === 'other' ? otherServiceType.trim() : serviceType;
+    const result = await updateOrganisation({ ...values, service_type: resolvedServiceType });
     setStatus(
       result.ok
         ? { tone: 'ok', text: 'Business details saved.' }
@@ -58,17 +72,37 @@ export function OrganisationForm({ initial }: { initial: OrgFormValues }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="org-name">Business name</Label>
-          <Input id="org-name" value={values.name} onChange={set('name')} required />
+          <CompanyNameField
+            id="org-name"
+            value={values.name}
+            onValueChange={(value) => setValues((current) => ({ ...current, name: value }))}
+            required
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="org-service">Service type</Label>
-          <Select id="org-service" value={values.service_type} onChange={set('service_type')}>
-            {SERVICE_TYPES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
+          <BoxedDropdown
+            id="org-service"
+            value={serviceType}
+            onChange={(value) => {
+              setServiceType(value);
+              if (value !== 'other') setOtherServiceType('');
+            }}
+            options={SERVICE_TYPES}
+            placeholder="Select your service type"
+          />
+          {serviceType === 'other' ? (
+            <div className="space-y-2">
+              <Label htmlFor="org-service-other">Tell us your service</Label>
+              <Input
+                id="org-service-other"
+                value={otherServiceType}
+                onChange={(e) => setOtherServiceType(e.target.value)}
+                required
+                placeholder="Type your service here"
+              />
+            </div>
+          ) : null}
         </div>
         <div className="space-y-2">
           <Label htmlFor="org-provider">CQC provider ID</Label>

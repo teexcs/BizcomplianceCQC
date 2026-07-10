@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Wand2 } from 'lucide-react';
+import { Check, ChevronDown, ScanSearch, Wand2, X, Zap } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,12 @@ import {
   setAreaAssessment,
   applySuggestedRags,
 } from '@/lib/actions/admin';
+import {
+  engineSuggest,
+  engineApply,
+  acceptSuggestion,
+  dismissSuggestion,
+} from '@/lib/actions/engine';
 import { suggestAreaRag, ITEM_STATUS_LABELS, REQUIREMENT_LABELS } from '@/lib/audit/scoring';
 import type { AuditArea, AuditItem, LibraryArea, ItemStatus, RagStatus } from '@/types/database';
 
@@ -82,8 +88,14 @@ export function Checklist({ items, areas, libraryAreas, auditId }: Props) {
     });
   }
 
+  const openSuggestions = items.filter(
+    (i) => i.status === 'unset' && i.suggested_status !== 'unset',
+  ).length;
+
   return (
     <div className="space-y-4">
+      <EngineBar auditId={auditId} openSuggestions={openSuggestions} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {items.filter((i) => i.status !== 'unset').length} of {items.length} documents reviewed.
@@ -186,6 +198,9 @@ export function Checklist({ items, areas, libraryAreas, auditId }: Props) {
                           ))}
                         </div>
                       </div>
+                      {item.status === 'unset' && item.suggested_status !== 'unset' ? (
+                        <SuggestionChip item={item} />
+                      ) : null}
                       {item.status !== 'unset' && item.status !== 'present' ? (
                         <ItemNote item={item} />
                       ) : null}
@@ -198,6 +213,134 @@ export function Checklist({ items, areas, libraryAreas, auditId }: Props) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function EngineBar({ auditId, openSuggestions }: { auditId: string; openSuggestions: number }) {
+  const router = useRouter();
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, startTransition] = useTransition();
+
+  function runSuggest() {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await engineSuggest(auditId);
+      setMessage(
+        result.ok && result.suggest
+          ? `Engine scanned ${result.suggest.evidenceScanned} files: ${result.suggest.itemsMatched} matched to evidence, ${result.suggest.itemsSuggestedMissing} flagged as likely missing.`
+          : result.error ?? 'Engine run failed.',
+      );
+      router.refresh();
+    });
+  }
+
+  function runApply() {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await engineApply(auditId);
+      setMessage(
+        result.ok && result.apply
+          ? `Applied ${result.apply.applied} statuses, rated ${result.apply.ragsSet} areas, drafted ${result.apply.findingsDrafted} findings, flagged ${result.apply.safFlagged} SAF questions. Score: ${result.apply.score}/100.`
+          : result.error ?? 'Apply failed.',
+      );
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="inline-flex items-center gap-2 text-sm font-medium">
+          <Zap size={15} className="text-[hsl(220,60%,68%)]" aria-hidden="true" />
+          Audit engine
+        </span>
+        <span className="text-xs text-muted-foreground flex-1 min-w-[200px]">
+          {openSuggestions > 0
+            ? `${openSuggestions} suggestions awaiting your review.`
+            : 'Scans the evidence vault, matches files to the checklist, drafts findings and scores — you stay in control of every decision.'}
+        </span>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={runSuggest}
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <ScanSearch size={14} aria-hidden="true" /> {busy ? 'Working…' : 'Run engine'}
+        </button>
+        <button
+          type="button"
+          disabled={busy || openSuggestions === 0}
+          onClick={runApply}
+          className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-3 py-2 text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
+        >
+          <Check size={14} aria-hidden="true" /> Accept all &amp; draft findings
+        </button>
+      </div>
+      {message ? (
+        <p role="status" className="mt-2 text-xs text-muted-foreground">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function SuggestionChip({ item }: { item: AuditItem }) {
+  const router = useRouter();
+  const [busy, startTransition] = useTransition();
+
+  const isPresent = item.suggested_status === 'present';
+  const confidence =
+    item.suggestion_confidence != null ? ` · ${Math.round(item.suggestion_confidence * 100)}%` : '';
+
+  return (
+    <div className="mt-2 ml-[4.25rem] flex flex-wrap items-center gap-2">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]',
+          isPresent
+            ? 'bg-[hsl(220,45%,55%)]/12 text-[hsl(220,60%,75%)]'
+            : 'bg-muted text-muted-foreground',
+        )}
+      >
+        <Zap size={11} aria-hidden="true" />
+        Engine: {ITEM_STATUS_LABELS[item.suggested_status]}
+        {confidence}
+        {item.suggestion_reason ? (
+          <span className="text-muted-foreground/80 max-w-[340px] truncate">
+            — {item.suggestion_reason}
+          </span>
+        ) : null}
+      </span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          startTransition(async () => {
+            await acceptSuggestion(item.id);
+            router.refresh();
+          })
+        }
+        aria-label={`Accept suggestion for ${item.ref}`}
+        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors disabled:opacity-50"
+      >
+        <Check size={11} aria-hidden="true" /> Accept
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() =>
+          startTransition(async () => {
+            await dismissSuggestion(item.id);
+            router.refresh();
+          })
+        }
+        aria-label={`Dismiss suggestion for ${item.ref}`}
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+      >
+        <X size={11} aria-hidden="true" /> Dismiss
+      </button>
     </div>
   );
 }

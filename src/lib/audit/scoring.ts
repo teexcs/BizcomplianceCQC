@@ -12,18 +12,23 @@ import type {
 // Weighting follows the checklist's requirement key: a missing LEGAL document
 // is a likely RED for its area; CQC-expected items carry most of the remaining
 // weight; best-practice and optional items refine the score without dominating.
-const REQUIREMENT_WEIGHT: Record<RequirementLevel, number> = {
+export const REQUIREMENT_WEIGHT: Record<RequirementLevel, number> = {
   legal: 3,
   cqc: 2,
   best: 1,
   optional: 0.5,
 };
 
-const ITEM_SCORE: Record<Exclude<ItemStatus, 'na' | 'unset'>, number> = {
+export const ITEM_SCORE: Record<Exclude<ItemStatus, 'na' | 'unset'>, number> = {
   present: 1,
   out_of_date: 0.4,
   missing: 0,
 };
+
+/** Points an item contributes at its status (0 for na/unset). */
+export function itemStatusValue(status: ItemStatus): number {
+  return status === 'na' || status === 'unset' ? 0 : ITEM_SCORE[status];
+}
 
 const SAF_SCORE: Record<Exclude<SafAnswer, 'na' | 'unset'>, number> = {
   yes: 1,

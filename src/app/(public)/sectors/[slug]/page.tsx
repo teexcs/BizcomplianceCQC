@@ -39,7 +39,7 @@ const sectorData: Record<string, {
 }> = {
   'domiciliary-care': {
     title: 'Domiciliary care',
-    hero: 'Home care providers are inspected on evidence they can rarely lay hands on quickly: lone working arrangements, medicines support in people’s own homes, travel-buffered rotas and remote supervision. Our library was built for domiciliary care first — 139 documents across all 18 CQC compliance areas.',
+    hero: 'Home care providers are inspected on evidence they can rarely lay hands on quickly: lone working arrangements, medicines support in people’s own homes, travel-buffered rotas and remote supervision. Our library was built for domiciliary care first and covers all 18 CQC compliance areas.',
     painPoints: [
       'Lone working risk assessments are legally required under MHSWR 1999 but often missing',
       'MAR charts and medicines audits are hard to evidence across dispersed home visits',

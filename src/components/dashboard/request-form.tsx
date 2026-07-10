@@ -2,10 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
+import { BoxedDropdown } from '@/components/site/boxed-dropdown';
 import { submitRequest } from '@/lib/actions/client';
 
 const REQUEST_TYPES = [
@@ -51,26 +50,27 @@ export function RequestForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="req-type">Request type</Label>
-          <Select id="req-type" value={type} onChange={(e) => setType(e.target.value)} required>
-            <option value="">Select a type</option>
-            {REQUEST_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
+          <BoxedDropdown
+            id="req-type"
+            value={type}
+            onChange={setType}
+            placeholder="Select a type"
+            options={REQUEST_TYPES.map((t) => ({ label: t, value: t }))}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="req-priority">Priority</Label>
-          <Select
+          <BoxedDropdown
             id="req-priority"
             value={priority}
-            onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </Select>
+            onChange={(value) => setPriority(value as 'low' | 'medium' | 'high')}
+            placeholder="Priority"
+            options={[
+              { label: 'Low', value: 'low' },
+              { label: 'Medium', value: 'medium' },
+              { label: 'High', value: 'high' },
+            ]}
+          />
         </div>
       </div>
       <div className="space-y-2">

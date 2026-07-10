@@ -40,13 +40,14 @@ const p = (text: string) =>
 const button = (href: string, label: string) =>
   `<p style="margin:22px 0;"><a href="${href}" style="background:#b8934a;color:#111722;text-decoration:none;font-weight:bold;font-size:14px;padding:12px 22px;border-radius:8px;display:inline-block;">${label}</a></p>`;
 
-export function welcomeEmail(businessName: string) {
+export function welcomeEmail(businessName: string, serviceType?: string) {
   return {
-    subject: 'Welcome to BizCompliance',
+    subject: 'Welcome to BizCompliance CQC',
     html: layout(
       `Welcome, ${escapeHtml(businessName)}`,
-      p('Your workspace is ready. The fastest route to inspection readiness is a one-off CQC Readiness Audit — a manual review of your evidence across all 18 compliance areas.') +
-        p('Once purchased, you can upload evidence straight into your secure vault and track progress from your dashboard.') +
+      p('Your account is ready. Your onboarding now lives in the dashboard, where you can upload policies, registers and records one by one.') +
+        p('Each upload fills the progress bars so you can see the dashboard move forward as you build your evidence set.') +
+        (serviceType ? p(`We’ve noted your service type as <strong>${escapeHtml(serviceType)}</strong>.`) : '') +
         button(`${SITE_URL()}/dashboard`, 'Open your dashboard'),
     ),
   };

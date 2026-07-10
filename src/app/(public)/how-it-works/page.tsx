@@ -34,32 +34,27 @@ const steps = [
   {
     num: '01',
     title: 'Sign up',
-    desc: 'Choose your plan and complete our streamlined onboarding form. We collect only the information we need to understand your business and its compliance obligations.',
-    detail: 'Takes 5 minutes',
+    desc: 'Create your account with your business name, country, service type, email and password.',
   },
   {
     num: '02',
-    title: 'Onboarding call',
-    desc: 'A 20-minute video call with one of our compliance specialists. We discuss your business model, current documentation, and any specific concerns or past issues.',
-    detail: 'Within 48 hours',
+    title: 'Open your dashboard',
+    desc: 'Your welcome email takes you straight into the dashboard, where onboarding and upload progress live.',
   },
   {
     num: '03',
-    title: 'Initial audit',
-    desc: 'Our team conducts a thorough manual review of your business against all applicable UK regulations. We examine your website, documentation, processes, and sector-specific requirements.',
-    detail: '5\u20137 days',
+    title: 'Upload evidence',
+    desc: 'Add policies, registers and records in the evidence vault. Each upload fills the progress bar.',
   },
   {
     num: '04',
-    title: 'Documents delivered',
-    desc: 'You receive a plain-English written audit report (10\u201315 pages) and all required compliance documents, drafted specifically for your business. Nothing templated.',
-    detail: 'Included in all plans',
+    title: 'Review the dashboard',
+    desc: 'Use the dashboard like a school tracker: progress bars fill as your evidence base grows.',
   },
   {
     num: '05',
-    title: 'Ongoing support',
-    desc: 'Your compliance documents are kept current as regulations change. We monitor your sector for new requirements and proactively update your documentation.',
-    detail: 'Monthly subscribers',
+    title: 'Move into audit review',
+    desc: 'Once the dashboard is populated, the manual audit and written review can begin.',
   },
 ];
 
@@ -77,27 +72,17 @@ export default function HowItWorksPage() {
           </p>
         </ScrollReveal>
 
-        <div className="relative">
-          {/* Timeline line */}
-          <div className="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-border" />
-
+        <div className="space-y-5">
           {steps.map((step, i) => (
             <ScrollReveal key={step.num} delay={i * 100}>
-              <div className="relative pl-16 md:pl-20 pb-16 last:pb-0">
-                {/* Step circle */}
-                <div className="absolute left-0 top-0 w-12 h-12 md:w-16 md:h-16 rounded-full bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] flex items-center justify-center">
-                  <span className="font-display text-sm md:text-base font-semibold">{step.num}</span>
-                </div>
-
-                <div className="pt-2 md:pt-3">
-                  <div className="flex flex-wrap items-center gap-3 mb-3">
-                    <h2 className="font-display text-2xl md:text-3xl tracking-tight">{step.title}</h2>
-                    <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground bg-muted px-2 py-1 rounded">
-                      {step.detail}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground leading-relaxed max-w-xl">{step.desc}</p>
-                </div>
+              <div className="border-l-2 border-border/70 pl-6 py-1">
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)]">
+                  Step {step.num}
+                </p>
+                <h2 className="mt-2 font-display text-2xl md:text-3xl tracking-tight">
+                  {step.title}
+                </h2>
+                <p className="mt-3 text-muted-foreground leading-relaxed max-w-xl">{step.desc}</p>
               </div>
             </ScrollReveal>
           ))}

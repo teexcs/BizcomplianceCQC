@@ -12,6 +12,8 @@ import {
   reportPublishedEmail,
   requestUpdateEmail,
 } from '@/lib/email/templates';
+import { siteVisitQuotaForPlan, formatQuota } from '@/lib/plans/entitlements';
+import type { PlanId } from '@/lib/stripe/plans';
 import type {
   Audit,
   AuditArea,
@@ -327,6 +329,7 @@ const issueSchema = z.object({
   orgId: z.string().uuid(),
   assetIds: z.array(z.string().uuid()).min(1).max(139),
   note: z.string().max(1000).optional(),
+  auditId: z.string().uuid().nullable().optional(),
 });
 
 export async function issueDocuments(input: z.infer<typeof issueSchema>): Promise<ActionResult> {
@@ -341,6 +344,19 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
   ]);
   if (!org) return fail('Organisation not found.');
   if (!assets?.length) return fail('No matching library documents.');
+
+  if (parsed.data.auditId) {
+    const { data: audit } = await admin
+      .from('audits')
+      .select('id, status')
+      .eq('id', parsed.data.auditId)
+      .eq('org_id', org.id)
+      .single<{ id: string; status: Audit['status'] }>();
+    if (!audit) return fail('Audit not found.');
+    if (!['delivered', 'closed'].includes(audit.status)) {
+      return fail('You can only issue documents from a delivered audit.');
+    }
+  }
 
   let issued = 0;
   const failures: string[] = [];
@@ -358,7 +374,8 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
       continue;
     }
 
-    const destPath = `${org.id}/${asset.ref}-v${asset.current_version}-${Date.now()}.docx`;
+    const fileName = `${asset.ref}-${asset.current_version}.docx`;
+    const destPath = `${org.id}/${parsed.data.auditId ?? 'general'}/${fileName}`;
     const { error: upError } = await admin.storage
       .from('deliverables')
       .upload(destPath, Buffer.from(await file.arrayBuffer()), {
@@ -381,8 +398,10 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
     const { error: insError } = await admin.from('client_documents').insert({
       org_id: org.id,
       asset_id: asset.id,
+      audit_id: parsed.data.auditId ?? null,
       title: asset.title,
       storage_path: destPath,
+      file_name: fileName,
       version: `${asset.current_version}.0`,
       note: parsed.data.note ?? null,
       issued_by: ctx.userId,
@@ -415,6 +434,9 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
 
   revalidatePath('/admin/library');
   revalidatePath('/admin/customers');
+  if (parsed.data.auditId) {
+    revalidatePath(`/admin/audits/${parsed.data.auditId}`);
+  }
   if (failures.length) {
     return { ok: issued > 0, error: `${issued} issued; problems: ${failures.join('; ')}` };
   }
@@ -587,8 +609,10 @@ export async function upsertAlert(input: z.infer<typeof alertSchema>): Promise<A
     body: parsed.data.body,
     category: parsed.data.category,
     external_url: parsed.data.external_url || null,
+    source_kind: 'manual',
     published: parsed.data.published,
     published_at: parsed.data.published ? new Date().toISOString() : null,
+    approved_at: parsed.data.published ? new Date().toISOString() : null,
   };
 
   if (parsed.data.id) {
@@ -598,6 +622,43 @@ export async function upsertAlert(input: z.infer<typeof alertSchema>): Promise<A
     const { error } = await supabase.from('alerts').insert(row);
     if (error) return fail('Could not create the alert.');
   }
+  revalidatePath('/admin/alerts');
+  revalidatePath('/dashboard/alerts');
+  return { ok: true };
+}
+
+export async function publishAlert(alertId: string): Promise<ActionResult> {
+  await requireAdminSession();
+  const supabase = await createClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from('alerts')
+    .select('id,published_at')
+    .eq('id', alertId)
+    .single<{ id: string; published_at: string | null }>();
+  if (fetchError || !existing) return fail('Could not publish the alert.');
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('alerts')
+    .update({
+      published: true,
+      approved_at: now,
+      published_at: existing.published_at ?? now,
+    })
+    .eq('id', alertId);
+  if (error) return fail('Could not publish the alert.');
+
+  revalidatePath('/admin/alerts');
+  revalidatePath('/dashboard/alerts');
+  return { ok: true };
+}
+
+export async function deleteAlert(alertId: string): Promise<ActionResult> {
+  await requireAdminSession();
+  const supabase = await createClient();
+  const { error } = await supabase.from('alerts').delete().eq('id', alertId);
+  if (error) return fail('Could not delete the alert.');
+
   revalidatePath('/admin/alerts');
   revalidatePath('/dashboard/alerts');
   return { ok: true };
@@ -651,12 +712,54 @@ const calendarSchema = z.object({
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+function dateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function quarterBounds(dateKeyValue: string): { start: string; end: string } {
+  const date = new Date(`${dateKeyValue}T00:00:00`);
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  const start = new Date(date.getFullYear(), quarterStartMonth, 1);
+  const end = new Date(date.getFullYear(), quarterStartMonth + 3, 0);
+  return { start: dateKey(start), end: dateKey(end) };
+}
+
 export async function createCalendarEvent(input: z.infer<typeof calendarSchema>): Promise<ActionResult> {
   const parsed = calendarSchema.safeParse(input);
   if (!parsed.success) return fail('Please complete the event details.');
   const ctx = await requireAdminSession();
 
   const supabase = await createClient();
+  if (parsed.data.event_type === 'site_visit') {
+    if (!parsed.data.org_id) return fail('Choose a client before setting a site visit.');
+    const { data: subscription } = await supabase
+      .from('subscriptions')
+      .select('plan, status, created_at')
+      .eq('org_id', parsed.data.org_id)
+      .in('status', ['active', 'trialing', 'past_due'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ plan: string; status: string; created_at: string }>();
+    const allowed = siteVisitQuotaForPlan(subscription?.plan as PlanId | undefined);
+    if (allowed <= 0) return fail('This plan does not include site visits.');
+
+    const { start, end } = quarterBounds(parsed.data.due_date);
+    const { count } = await supabase
+      .from('calendar_events')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', parsed.data.org_id)
+      .eq('event_type', 'site_visit')
+      .gte('due_date', start)
+      .lte('due_date', end);
+
+    if ((count ?? 0) >= allowed) {
+      return fail(`This client already has ${allowed} site visit${allowed === 1 ? '' : 's'} scheduled for that quarter.`);
+    }
+  }
+
   const { error } = await supabase.from('calendar_events').insert({
     org_id: parsed.data.org_id,
     title: parsed.data.title,

@@ -1,12 +1,14 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
-import { PLANS } from '@/lib/stripe/plans';
+import { PLANS, type PlanId } from '@/lib/stripe/plans';
+import { entitlementsFor } from '@/lib/plans/entitlements';
 import type {
   Audit,
   AuditArea,
   AuditFinding,
   AuditItem,
   ContactMessage,
+  CalendarEvent,
   EvidenceFile,
   LibraryArea,
   LibraryAsset,
@@ -16,6 +18,7 @@ import type {
   ComplianceRequest,
   SafQuestion,
   SafResponse,
+  SocialProfile,
   Subscription,
   Task,
   Alert,
@@ -102,15 +105,23 @@ export interface AdminCustomerRow {
   subscription: Subscription | null;
   auditCount: number;
   latestScore: number | null;
+  socialProfiles: SocialProfile[];
 }
 
 export async function getCustomers(): Promise<AdminCustomerRow[]> {
   const supabase = await createClient();
-  const [{ data: profiles }, { data: orgs }, { data: subs }, { data: audits }] = await Promise.all([
+  const [{ data: profiles }, { data: orgs }, { data: subs }, { data: audits }, { data: socials }] =
+    await Promise.all([
     supabase.from('profiles').select('*').eq('role', 'client').order('created_at', { ascending: false }),
     supabase.from('organisations').select('*'),
     supabase.from('subscriptions').select('*'),
     supabase.from('audits').select('id, org_id, score, created_at'),
+    supabase
+      .from('social_profiles')
+      .select('*')
+      .order('category', { ascending: true })
+      .order('sort', { ascending: true })
+      .order('created_at', { ascending: true }),
   ]);
 
   const orgById = new Map(((orgs as Organisation[]) ?? []).map((o) => [o.id, o]));
@@ -120,6 +131,12 @@ export async function getCustomers(): Promise<AdminCustomerRow[]> {
     if (!existing || s.created_at > existing.created_at) subByOrg.set(s.org_id, s);
   }
   const auditsByOrg = new Map<string, { count: number; latestScore: number | null; latestAt: string }>();
+  const socialsByOrg = new Map<string, SocialProfile[]>();
+  for (const s of (socials as SocialProfile[]) ?? []) {
+    const list = socialsByOrg.get(s.org_id) ?? [];
+    list.push(s);
+    socialsByOrg.set(s.org_id, list);
+  }
   for (const a of (audits as Pick<Audit, 'id' | 'org_id' | 'score' | 'created_at'>[]) ?? []) {
     const cur = auditsByOrg.get(a.org_id);
     if (!cur) auditsByOrg.set(a.org_id, { count: 1, latestScore: a.score, latestAt: a.created_at });
@@ -142,6 +159,7 @@ export async function getCustomers(): Promise<AdminCustomerRow[]> {
       subscription,
       auditCount: auditAgg?.count ?? 0,
       latestScore: auditAgg?.latestScore ?? null,
+      socialProfiles: p.org_id ? socialsByOrg.get(p.org_id) ?? [] : [],
     };
   });
 }
@@ -169,7 +187,8 @@ export async function getAdminStats(): Promise<AdminStats> {
     supabase
       .from('evidence_files')
       .select('id', { count: 'exact', head: true })
-      .eq('review_status', 'pending'),
+      .eq('review_status', 'pending')
+      .eq('lifecycle_state', 'current'),
     supabase
       .from('requests')
       .select('id', { count: 'exact', head: true })
@@ -218,6 +237,7 @@ export async function getEvidenceQueue(): Promise<EvidenceQueueRow[]> {
   const { data } = await supabase
     .from('evidence_files')
     .select('*, organisation:organisations(id, name)')
+    .eq('lifecycle_state', 'current')
     .order('created_at', { ascending: false })
     .limit(200);
   return (data as unknown as EvidenceQueueRow[]) ?? [];
@@ -231,6 +251,51 @@ export async function getTasks(): Promise<Task[]> {
     .order('completed', { ascending: true })
     .order('due_date', { ascending: true, nullsFirst: false });
   return (data as Task[]) ?? [];
+}
+
+export async function getCalendarEvents(): Promise<CalendarEvent[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('calendar_events')
+    .select('*')
+    .order('due_date', { ascending: true });
+  return (data as CalendarEvent[]) ?? [];
+}
+
+export interface CalendarOrganisationOption {
+  id: string;
+  name: string;
+  planLabel: string;
+  siteVisitPerQuarter: number;
+}
+
+export async function getOrganisationsForCalendar(): Promise<CalendarOrganisationOption[]> {
+  const supabase = await createClient();
+  const [{ data: orgs }, { data: subs }] = await Promise.all([
+    supabase.from('organisations').select('id, name').order('name'),
+    supabase
+      .from('subscriptions')
+      .select('org_id, plan, status, created_at')
+      .in('status', ['active', 'trialing', 'past_due']),
+  ]);
+
+  const subByOrg = new Map<string, { plan: string; created_at: string }>();
+  for (const sub of ((subs as { org_id: string; plan: string; created_at: string }[]) ?? [])) {
+    const current = subByOrg.get(sub.org_id);
+    if (!current || sub.created_at > current.created_at) subByOrg.set(sub.org_id, sub);
+  }
+
+  return ((orgs as Pick<Organisation, 'id' | 'name'>[]) ?? []).map((org) => {
+    const sub = subByOrg.get(org.id);
+    const planId = sub?.plan as PlanId | undefined;
+    const entitlements = entitlementsFor(planId);
+    return {
+      id: org.id,
+      name: org.name,
+      planLabel: sub ? PLANS[sub.plan as PlanId]?.name ?? sub.plan : 'Pay-as-you-go',
+      siteVisitPerQuarter: entitlements.siteVisitPerQuarter,
+    };
+  });
 }
 
 export interface AdminRequestRow extends ComplianceRequest {

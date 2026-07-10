@@ -92,7 +92,7 @@ export default function ServicesPage() {
             Everything a care provider needs to face CQC with confidence
           </h1>
           <p className="text-lg text-muted-foreground leading-relaxed mb-16 max-w-2xl">
-            Readiness audits, a 139-document compliance library, evidence review and ongoing
+            Readiness audits, a specialist compliance library, evidence review and ongoing
             support — mapped to the HSCA 2008 Regulated Activities Regulations and the CQC Single
             Assessment Framework.
           </p>

@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { requireOrgSession } from '@/lib/data/session';
+import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
 import { getRequests } from '@/lib/data/client';
 import { RequestForm } from '@/components/dashboard/request-form';
 import { formatDate } from '@/lib/utils';
+import { formatQuota } from '@/lib/plans/entitlements';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,24 +31,68 @@ const PRIORITY_STYLES: Record<string, string> = {
 
 export default async function RequestsPage() {
   const ctx = await requireOrgSession();
-  const requests = await getRequests(ctx.org.id);
+  const [requests, used] = await Promise.all([
+    getRequests(ctx.org.id),
+    getRequestUsageThisMonth(ctx.org.id),
+  ]);
+  const quota = ctx.entitlements.docRequestsPerMonth;
+  const hasQuota = quota > 0;
+  const remaining = Math.max(0, quota - used);
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-3xl tracking-tight">Requests</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ask for document updates, evidence reviews or compliance guidance. Requests are handled
-          under your plan&apos;s response time.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl tracking-tight">Requests</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ask for document updates, evidence reviews or compliance guidance. Requests are handled
+            under your plan&apos;s response time.
+          </p>
+        </div>
+        {hasQuota ? (
+          <div className="text-right shrink-0">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">This month</p>
+            <p className="text-sm font-medium tabular-nums">
+              {used} / {formatQuota(quota)} used
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <h2 className="font-display text-lg tracking-tight mb-4">New request</h2>
-          <RequestForm />
-        </CardContent>
-      </Card>
+      {hasQuota ? (
+        <Card>
+          <CardContent className="pt-6">
+            <h2 className="font-display text-lg tracking-tight mb-4">New request</h2>
+            {remaining > 0 ? (
+              <RequestForm />
+            ) : (
+              <p className="text-sm text-muted-foreground py-4">
+                You&apos;ve used all {formatQuota(quota)} of this month&apos;s requests on the{' '}
+                {ctx.entitlements.label} plan. They reset on the 1st, or{' '}
+                <Link href="/pricing?change=1" className="text-[hsl(220,45%,40%)] hover:underline">
+                  upgrade for more
+                </Link>
+                .
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="pt-6 text-center py-10 space-y-3">
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              Document and support requests are part of a monthly plan. Add one to request policy
+              updates, evidence reviews and compliance guidance directly from your auditor.
+            </p>
+            <Link
+              href="/pricing?change=1"
+              className="inline-flex items-center justify-center rounded-lg h-10 px-6 text-sm font-semibold bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] hover:bg-[hsl(220,50%,20%)] transition-colors"
+            >
+              View plans
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="pt-6">

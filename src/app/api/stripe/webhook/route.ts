@@ -70,6 +70,12 @@ export async function POST(request: Request) {
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 async function handleCheckoutCompleted(supabase: AdminClient, session: Stripe.Checkout.Session) {
+  // Anonymous website-scan report purchase — separate flow, no org involved.
+  if (session.metadata?.scan_id) {
+    await handleScanReportPaid(supabase, session);
+    return;
+  }
+
   let orgId = session.metadata?.org_id ?? null;
   let planId = session.metadata?.plan_id as PlanId | undefined;
   let org: { id: string; name: string; owner_id: string } | null = null;
@@ -212,6 +218,59 @@ async function handleCheckoutCompleted(supabase: AdminClient, session: Stripe.Ch
     entity: 'stripe_checkout_session',
     entity_id: session.id,
     meta: { plan: planId, mode: session.mode, amount: session.amount_total },
+  });
+}
+
+async function handleScanReportPaid(supabase: AdminClient, session: Stripe.Checkout.Session) {
+  const scanId = session.metadata!.scan_id!;
+  const payerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+
+  const { data: scan } = await supabase
+    .from('website_scans')
+    .update({
+      paid: true,
+      stripe_checkout_session_id: session.id,
+      ...(payerEmail ? { email: payerEmail } : {}),
+    })
+    .eq('id', scanId)
+    .select('id, domain, email, score')
+    .maybeSingle<{ id: string; domain: string; email: string | null; score: number }>();
+  if (!scan) {
+    console.error('[stripe] paid scan not found', scanId);
+    return;
+  }
+
+  // Generate and store the full PDF report (best-effort; page unlock is already done).
+  try {
+    const { generateScanReport } = await import('@/lib/report/scan-report');
+    await generateScanReport(scanId);
+  } catch (e) {
+    console.error('[stripe] scan report generation failed', e);
+  }
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  const to = scan.email ?? payerEmail;
+  if (to) {
+    void sendEmail({
+      to,
+      subject: `Your full website compliance report — ${scan.domain}`,
+      html: `<p style="font-size:14px;color:#333a47;">Thank you — your full report for <strong>${scan.domain}</strong> is unlocked, with a step-by-step fix for every issue.</p><p style="margin:18px 0;"><a href="${siteUrl}/scan/${scan.id}" style="font-size:14px;font-weight:bold;">View your full report</a></p><p style="font-size:13px;color:#7a7f8c;">You can also download it as a PDF from the same page.</p><p style="font-size:13px;color:#7a7f8c;line-height:1.6;margin-top:16px;">Ready for the full picture? Your website is one part of CQC compliance — our <a href="${siteUrl}/#start" style="color:#111a2c;font-weight:bold;">one-off readiness audit</a> reviews all 139 evidence points across 18 areas and gives you a priority action plan in 48 hours.</p>`,
+    });
+  }
+  const admins = adminEmails();
+  if (admins.length) {
+    void sendEmail({
+      to: admins,
+      subject: `£8.99 scan report sold — ${scan.domain}`,
+      html: `<p>${to ?? 'A visitor'} bought the full website report for ${scan.domain} (score ${Number(scan.score).toFixed(1)}/10).</p>`,
+    });
+  }
+
+  await supabase.from('activity_log').insert({
+    action: 'scan.report_purchased',
+    entity: 'website_scans',
+    entity_id: scanId,
+    meta: { domain: scan.domain, email: to },
   });
 }
 

@@ -1,4 +1,5 @@
 export type PlanId = 'audit' | 'essentials' | 'professional' | 'partner';
+export type BillingInterval = 'monthly' | 'annual';
 
 export interface Plan {
   id: PlanId;
@@ -6,9 +7,12 @@ export interface Plan {
   priceGbp: number;
   cadence: 'one-off' | 'monthly';
   stripePriceIdEnv: string;
+  annualStripePriceIdEnv?: string;
   description: string;
   features: string[];
   popular?: boolean;
+  /** Visible on pricing but not purchasable yet. */
+  comingSoon?: boolean;
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -37,6 +41,7 @@ export const PLANS: Record<PlanId, Plan> = {
     priceGbp: 49,
     cadence: 'monthly',
     stripePriceIdEnv: 'STRIPE_PRICE_ESSENTIALS_MONTHLY',
+    annualStripePriceIdEnv: 'STRIPE_PRICE_ESSENTIALS_ANNUAL',
     description:
       'Ongoing compliance cover for small domiciliary and supported-living providers.',
     features: [
@@ -52,16 +57,18 @@ export const PLANS: Record<PlanId, Plan> = {
   professional: {
     id: 'professional',
     name: 'Professional',
-    priceGbp: 99,
+    priceGbp: 129,
     cadence: 'monthly',
     stripePriceIdEnv: 'STRIPE_PRICE_PROFESSIONAL_MONTHLY',
+    annualStripePriceIdEnv: 'STRIPE_PRICE_PROFESSIONAL_ANNUAL',
     description:
       'For registered managers who want continuous inspection readiness, not just paperwork.',
     features: [
       'Everything in Essentials',
       'Quarterly re-audit with updated readiness score',
       'Evidence vault reviews with feedback from your auditor',
-      'Priority document requests (up to 6 per month)',
+      'Priority personalised document requests (up to 6 per month)',
+      'One site visit per quarter',
       'Mock SAF interview preparation sheet',
       'Quarterly 30-minute compliance call',
       'Email support — 24-hour response',
@@ -71,8 +78,10 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'partner',
     name: 'Partner',
     priceGbp: 249,
+    comingSoon: true,
     cadence: 'monthly',
     stripePriceIdEnv: 'STRIPE_PRICE_PARTNER_MONTHLY',
+    annualStripePriceIdEnv: 'STRIPE_PRICE_PARTNER_ANNUAL',
     description:
       'For care consultants and franchise operators supporting multiple CQC-registered services.',
     features: [
@@ -87,11 +96,23 @@ export const PLANS: Record<PlanId, Plan> = {
 };
 
 export function getStripePriceId(planId: PlanId): string {
+  return getStripePriceIdForInterval(planId, 'monthly');
+}
+
+export function getStripePriceIdForInterval(
+  planId: PlanId,
+  interval: BillingInterval,
+): string {
   const plan = PLANS[planId];
-  const priceId = process.env[plan.stripePriceIdEnv];
+  const envKey = interval === 'annual' && plan.annualStripePriceIdEnv
+    ? plan.annualStripePriceIdEnv
+    : plan.stripePriceIdEnv;
+  const priceId = process.env[envKey];
   if (!priceId) {
     throw new Error(
-      `Missing Stripe price ID for plan "${planId}" — set ${plan.stripePriceIdEnv} in env`,
+      interval === 'annual'
+        ? `Missing Stripe annual price ID for plan "${planId}" — set ${plan.annualStripePriceIdEnv} in env`
+        : `Missing Stripe price ID for plan "${planId}" — set ${plan.stripePriceIdEnv} in env`,
     );
   }
   return priceId;

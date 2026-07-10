@@ -11,6 +11,7 @@ export type AuditStatus = 'intake' | 'evidence' | 'in_review' | 'report_draft' |
 export type ItemStatus = 'unset' | 'present' | 'missing' | 'out_of_date' | 'na';
 export type RagStatus = 'unset' | 'green' | 'amber' | 'red';
 export type RequirementLevel = 'legal' | 'cqc' | 'best' | 'optional';
+export type SocialProfileCategory = 'social' | 'messaging' | 'reviews' | 'directory' | 'other';
 export type SafAnswer = 'unset' | 'yes' | 'partial' | 'no' | 'na';
 export type SafDomain = 'safe' | 'effective' | 'caring' | 'responsive' | 'well_led';
 export type ScanStatus = 'pending' | 'clean' | 'infected' | 'error';
@@ -18,6 +19,7 @@ export type ReviewStatus = 'pending' | 'reviewed' | 'flagged';
 export type RequestStatus = 'open' | 'in_review' | 'delivered' | 'closed';
 export type PriorityLevel = 'low' | 'medium' | 'high';
 export type DocStatus = 'issued' | 'superseded' | 'withdrawn';
+export type EvidenceLifecycleState = 'current' | 'superseded';
 export type FindingPriority = 'fix_first' | 'days_7' | 'days_14' | 'days_30';
 export type FindingStatus = 'open' | 'resolved';
 
@@ -43,6 +45,20 @@ export interface Organisation {
   city: string | null;
   postcode: string | null;
   owner_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SocialProfile {
+  id: string;
+  org_id: string;
+  category: SocialProfileCategory;
+  platform: string;
+  label: string | null;
+  handle: string | null;
+  url: string | null;
+  notes: string | null;
+  sort: number;
   created_at: string;
   updated_at: string;
 }
@@ -97,13 +113,26 @@ export interface ClientDocument {
   id: string;
   org_id: string;
   asset_id: string | null;
+  audit_id: string | null;
   title: string;
   storage_path: string;
+  file_name: string | null;
   version: string;
   note: string | null;
   status: DocStatus;
   issued_by: string | null;
   issued_at: string;
+  review_due_at: string | null;
+}
+
+export interface EngineRun {
+  id: string;
+  kind: string;
+  org_id: string | null;
+  audit_id: string | null;
+  stats: Record<string, unknown>;
+  duration_ms: number | null;
+  created_at: string;
 }
 
 export interface EvidenceFile {
@@ -118,6 +147,9 @@ export interface EvidenceFile {
   uploaded_by: string | null;
   scan_status: ScanStatus;
   review_status: ReviewStatus;
+  lifecycle_state: EvidenceLifecycleState;
+  replaces_evidence_id: string | null;
+  superseded_by_id: string | null;
   reviewer_note: string | null;
   created_at: string;
 }
@@ -131,6 +163,8 @@ export interface Audit {
   score: number | null;
   summary: string | null;
   purchase_id: string | null;
+  parent_audit_id: string | null;
+  auto_created: boolean;
   started_at: string;
   due_at: string | null;
   delivered_at: string | null;
@@ -148,6 +182,10 @@ export interface AuditItem {
   status: ItemStatus;
   note: string | null;
   evidence_id: string | null;
+  suggested_status: ItemStatus;
+  suggested_evidence_id: string | null;
+  suggestion_confidence: number | null;
+  suggestion_reason: string | null;
   updated_at: string;
 }
 
@@ -179,6 +217,8 @@ export interface SafResponse {
   question_id: number;
   answer: SafAnswer;
   note: string | null;
+  suggested_answer: SafAnswer;
+  suggestion_reason: string | null;
   updated_at: string;
 }
 
@@ -237,8 +277,10 @@ export interface Alert {
   body: string;
   category: string;
   external_url: string | null;
+  source_kind: string;
   published: boolean;
   published_at: string | null;
+  approved_at: string | null;
   created_at: string;
 }
 

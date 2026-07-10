@@ -1,13 +1,32 @@
 import Link from 'next/link';
-import { FileDown, ArrowRight, ShieldCheck } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { requireOrgSession } from '@/lib/data/session';
 import {
-  getLatestAudit,
-  getIssuedDocuments,
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  FileDown,
+  Minus,
+  ShieldCheck,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { PlanPanel } from '@/components/dashboard/plan-panel';
+import { ScoreTrend } from '@/components/dashboard/score-trend';
+import { ScoreChangePanel } from '@/components/dashboard/score-change-panel';
+import { ScoreDial, ScoreBarRow } from '@/components/score-dial';
+import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
+import {
   getCalendarEvents,
+  getAlerts,
+  getEvidenceFiles,
+  getIssuedDocuments,
+  getLatestAudit,
   getLibraryAreas,
+  getBenchmark,
+  getScoreTrend,
+  getLatestScoreChange,
+  getSafDomainScores,
+  getAuditCompleteness,
 } from '@/lib/data/client';
 import { ragCounts, AUDIT_STATUS_LABELS, FINDING_PRIORITY_LABELS } from '@/lib/audit/scoring';
 import { formatDate } from '@/lib/utils';
@@ -16,33 +35,126 @@ export const dynamic = 'force-dynamic';
 
 export default async function DashboardOverviewPage() {
   const ctx = await requireOrgSession();
-  const [latest, documents, events, libraryAreas] = await Promise.all([
+  const [latest, evidenceFiles, documents, events, libraryAreas, requestsUsed, alerts] = await Promise.all([
     getLatestAudit(ctx.org.id),
+    getEvidenceFiles(ctx.org.id),
     getIssuedDocuments(ctx.org.id),
     getCalendarEvents(ctx.org.id),
     getLibraryAreas(),
+    getRequestUsageThisMonth(ctx.org.id),
+    getAlerts(ctx.userId),
   ]);
 
   const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
+  const uploadGoal = 10;
+  const currentEvidenceFiles = evidenceFiles.filter((f) => f.lifecycle_state !== 'superseded');
+  const uploadCount = currentEvidenceFiles.length;
+  const filledBars = Math.min(uploadCount, uploadGoal);
+  const uploadPct = Math.round((filledBars / uploadGoal) * 100);
+  const unreadAlerts = alerts.filter((a) => !a.isRead);
+  const auditCompleted = latest ? ['delivered', 'closed'].includes(latest.audit.status) : false;
+
+  const onboardingSteps = [
+    {
+      label: 'Step 1',
+      title: 'Book your CQC audit',
+      body: 'This starts the one-off audit that unlocks the rest of the workspace.',
+      href: '/pricing',
+    },
+    {
+      label: 'Step 2',
+      title: 'Upload policies and evidence',
+      body: 'The vault files documents into the right CQC area as you add them.',
+      href: '/dashboard/evidence',
+    },
+    {
+      label: 'Step 3',
+      title: 'Use the compliance calendar',
+      body: 'Deadlines and reminders stay visible in a proper calendar view.',
+      href: '/dashboard/calendar',
+    },
+  ];
+
+  const onboardingStrip = !auditCompleted ? (
+    <section className="space-y-4 border-b border-border/70 pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            Onboarding
+          </p>
+          <h1 className="font-display text-3xl tracking-tight">
+            {latest ? 'Welcome back' : `Welcome, ${ctx.org.name}`}
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Complete the setup in order so the dashboard, evidence vault and admin workflow all
+            work the same way every time.
+          </p>
+        </div>
+        <Link
+          href={latest ? '/dashboard/evidence' : '/pricing'}
+          className="inline-flex items-center gap-2 rounded-none border border-[hsl(220,50%,15%)] bg-[hsl(220,50%,15%)] px-4 py-2.5 text-sm font-medium text-[hsl(36,33%,97%)] transition-colors hover:bg-[hsl(220,50%,20%)]"
+        >
+          {latest ? 'Upload evidence' : 'Book your CQC audit'} <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>Evidence upload progress</span>
+          <span>
+            {uploadCount}/{uploadGoal} files
+          </span>
+        </div>
+        <div className="grid grid-cols-10 gap-1">
+          {Array.from({ length: uploadGoal }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-2.5 rounded-full ${
+                i < filledBars ? 'bg-[hsl(220,50%,15%)]' : 'bg-border'
+              }`}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">{uploadPct}% complete</p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {onboardingSteps.map((step) => (
+          <Link
+            key={step.label}
+            href={step.href}
+            className="border border-border/70 bg-background px-4 py-3 transition-colors hover:bg-muted/40"
+          >
+            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              {step.label}
+            </p>
+            <p className="mt-1 text-sm font-medium">{step.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.body}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  ) : null;
 
   if (!latest) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-16 space-y-6">
-        <ShieldCheck className="mx-auto text-[hsl(220,45%,45%)]" size={48} aria-hidden="true" />
-        <h1 className="font-display text-3xl tracking-tight">
-          Welcome, {ctx.org.name}
-        </h1>
-        <p className="text-muted-foreground leading-relaxed">
-          Your workspace is ready. Start with a one-off CQC Readiness Audit — a manual review of
-          your evidence across all 18 compliance areas, delivered with a readiness score, risk-rated
-          findings and a priority action plan.
-        </p>
-        <Link
-          href="/pricing"
-          className="inline-flex items-center gap-2 rounded-md bg-[hsl(220,50%,15%)] text-[hsl(36,33%,97%)] px-6 py-3 text-sm font-medium hover:bg-[hsl(220,50%,15%)]/90 transition-colors"
-        >
-          Start your readiness audit <ArrowRight size={16} aria-hidden="true" />
-        </Link>
+      <div className="space-y-8">
+        {onboardingStrip}
+        <div className="max-w-2xl mx-auto space-y-6 py-16 text-center">
+          <ShieldCheck className="mx-auto text-[hsl(36,45%,45%)]" size={48} aria-hidden="true" />
+          <h2 className="font-display text-3xl tracking-tight">Start with a CQC audit</h2>
+          <p className="leading-relaxed text-muted-foreground">
+            Your workspace is ready. Start with a one-off CQC Readiness Audit - a manual review of
+            your evidence across all 18 compliance areas, delivered with a readiness score,
+            risk-rated findings and a priority action plan.
+          </p>
+          <Link
+            href="/pricing"
+            className="inline-flex items-center gap-2 rounded-md bg-[hsl(220,50%,15%)] px-6 py-3 text-sm font-medium text-[hsl(36,33%,97%)] transition-colors hover:bg-[hsl(220,50%,15%)]/90"
+          >
+            Book your CQC audit <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     );
   }
@@ -53,103 +165,159 @@ export default async function DashboardOverviewPage() {
   const score = audit.score ?? 0;
   const scoreVisible = audit.status === 'delivered' || audit.status === 'closed';
 
-  const readinessTone =
-    score >= 80
-      ? 'bg-green-100 text-green-800'
+  const [trend, benchmark, domainScores, scoreChange, completeness] = scoreVisible
+    ? await Promise.all([
+        getScoreTrend(ctx.org.id),
+        getBenchmark(score),
+        getSafDomainScores(audit.id),
+        getLatestScoreChange(ctx.org.id),
+        getAuditCompleteness(audit.id),
+      ])
+    : [[], null, [], null, null];
+
+  // The delivered score is the fixed deliverable; "current readiness" is the
+  // live figure. They start equal at delivery and only diverge as documents
+  // age or are renewed — so we only surface the current line once it differs.
+  const currentReadiness = scoreChange?.current ?? null;
+  const readinessDrift =
+    currentReadiness != null && currentReadiness !== score ? currentReadiness - score : null;
+  const notAssessed = counts.unset;
+
+  const scoreLabel =
+    score >= 90
+      ? 'Compliant — keep your evidence current.'
       : score >= 60
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-red-100 text-red-800';
+        ? 'Not there yet — work through your action plan.'
+        : 'Critical — address these gaps first.';
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      {onboardingStrip}
+
+      <div className="flex flex-wrap items-start justify-between gap-4 pt-2">
         <div>
           <h1 className="font-display text-3xl tracking-tight">Compliance overview</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {ctx.org.name} · Audit status:{' '}
-            <span className="font-medium text-foreground">
-              {AUDIT_STATUS_LABELS[audit.status]}
-            </span>
-            {audit.due_at && !scoreVisible
-              ? ` · due ${formatDate(audit.due_at)}`
-              : ''}
+            <span className="font-medium text-foreground">{AUDIT_STATUS_LABELS[audit.status]}</span>
+            {audit.due_at && !scoreVisible ? ` · due ${formatDate(audit.due_at)}` : ''}
           </p>
         </div>
         {report ? (
           <a
             href={`/api/files/download?type=report&id=${report.id}`}
-            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             <FileDown size={16} aria-hidden="true" /> Download audit report
           </a>
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              CQC readiness score
-            </p>
-            {scoreVisible ? (
-              <>
-                <p className="mt-2 text-4xl font-semibold tabular-nums">{score}</p>
-                <Badge className={`mt-2 ${readinessTone}`}>
-                  {score >= 80 ? 'Strong' : score >= 60 ? 'Progressing' : 'Needs attention'}
-                </Badge>
-              </>
-            ) : (
-              <>
-                <p className="mt-2 text-2xl font-semibold text-muted-foreground">In review</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Your score is calculated when the audit is delivered.
+      <Card>
+        <CardContent className="pt-6 pb-6">
+          {scoreVisible ? (
+            <div className="grid gap-8 md:grid-cols-2 items-center">
+              <div className="flex flex-col items-center text-center">
+                <ScoreDial pct={score} display={String(score)} caption="/100" />
+                <h2 className="mt-4 font-display text-xl tracking-tight">CQC Readiness Score</h2>
+                <p className="mt-1.5 text-sm text-muted-foreground max-w-[260px]">{scoreLabel}</p>
+                {completeness && completeness.total > 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {completeness.pct >= 100
+                      ? `All ${completeness.total} evidence points assessed`
+                      : `${completeness.decided} of ${completeness.total} evidence points assessed`}
+                  </p>
+                ) : null}
+                {readinessDrift != null ? (
+                  <p
+                    className={`mt-1 text-xs font-medium ${
+                      readinessDrift < 0 ? 'text-[hsl(4,65%,42%)]' : 'text-[hsl(152,45%,28%)]'
+                    }`}
+                  >
+                    Current readiness {currentReadiness}/100 ({readinessDrift > 0 ? '+' : ''}
+                    {readinessDrift} since delivery)
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold mb-4">The five key questions</h3>
+                <div className="space-y-3">
+                  {domainScores.map((d) =>
+                    d.score != null ? (
+                      <ScoreBarRow
+                        key={d.domain}
+                        label={d.label}
+                        pct={d.score * 10}
+                        display={`${d.score.toFixed(1)}/10`}
+                      />
+                    ) : (
+                      <div key={d.domain} className="flex items-center gap-3">
+                        <span className="w-40 shrink-0 text-sm text-[hsl(220,25%,25%)]">{d.label}</span>
+                        <div className="h-2 flex-1 rounded-full bg-[hsl(220,14%,92%)]" />
+                        <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
+                          Not assessed
+                        </span>
+                      </div>
+                    ),
+                  )}
+                </div>
+                <div className="mt-5 space-y-1.5">
+                  <div className="flex items-center justify-between rounded-lg px-3 py-2 bg-[hsl(4,72%,48%)]/[0.07] text-[hsl(4,65%,42%)]">
+                    <span className="inline-flex items-center gap-2 text-sm font-medium">
+                      <AlertCircle size={15} aria-hidden="true" /> Critical gaps
+                    </span>
+                    <span className="text-sm font-bold tabular-nums">{counts.red}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg px-3 py-2 bg-[hsl(24,85%,50%)]/[0.08] text-[hsl(24,80%,38%)]">
+                    <span className="inline-flex items-center gap-2 text-sm font-medium">
+                      <AlertTriangle size={15} aria-hidden="true" /> Needs improvement
+                    </span>
+                    <span className="text-sm font-bold tabular-nums">{counts.amber}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg px-3 py-2 bg-[hsl(152,47%,38%)]/[0.08] text-[hsl(152,45%,28%)]">
+                    <span className="inline-flex items-center gap-2 text-sm font-medium">
+                      <CheckCircle2 size={15} aria-hidden="true" /> Compliant areas
+                    </span>
+                    <span className="text-sm font-bold tabular-nums">{counts.green}</span>
+                  </div>
+                  {notAssessed > 0 ? (
+                    <div className="flex items-center justify-between rounded-lg px-3 py-2 bg-muted/60 text-muted-foreground">
+                      <span className="inline-flex items-center gap-2 text-sm font-medium">
+                        <Minus size={15} aria-hidden="true" /> Not yet assessed
+                      </span>
+                      <span className="text-sm font-bold tabular-nums">{notAssessed}</span>
+                    </div>
+                  ) : null}
+                  <p className="pt-1 text-right text-xs text-muted-foreground">
+                    {counts.red + counts.amber + counts.green + notAssessed} of 18 areas
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-6 py-2">
+              <ScoreDial pct={0} display="—" caption="in review" size={120} />
+              <div>
+                <h2 className="font-display text-xl tracking-tight">CQC Readiness Score</h2>
+                <p className="mt-1 text-sm text-muted-foreground max-w-md">
+                  Your score is calculated when the audit is delivered. Keep uploading evidence —
+                  the more complete your vault, the sharper the findings.
                 </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Compliant areas</p>
-            <p className="mt-2 text-4xl font-semibold text-green-700 tabular-nums">
-              {scoreVisible ? counts.green : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">of 18 compliance areas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Needs improvement
-            </p>
-            <p className="mt-2 text-4xl font-semibold text-amber-700 tabular-nums">
-              {scoreVisible ? counts.amber : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">amber-rated areas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Critical gaps</p>
-            <p className="mt-2 text-4xl font-semibold text-red-700 tabular-nums">
-              {scoreVisible ? counts.red : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">red-rated areas</p>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <h2 className="font-display text-lg tracking-tight">Priority actions</h2>
-              <span className="text-xs text-muted-foreground">
-                {openFindings.length} open
-              </span>
+              <span className="text-xs text-muted-foreground">{openFindings.length} open</span>
             </div>
             {!scoreVisible ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">
+              <p className="py-8 text-center text-sm text-muted-foreground">
                 Your action plan appears here once the audit is delivered. In the meantime, upload
                 your policies and evidence to the{' '}
                 <Link href="/dashboard/evidence" className="text-[hsl(220,45%,45%)] hover:underline">
@@ -158,16 +326,16 @@ export default async function DashboardOverviewPage() {
                 so the review can begin.
               </p>
             ) : openFindings.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                No open actions — keep your evidence current.
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No open actions - keep your evidence current.
               </p>
             ) : (
               <ul className="divide-y">
                 {openFindings.slice(0, 6).map((f) => (
-                  <li key={f.id} className="py-3 flex items-start gap-3">
+                  <li key={f.id} className="flex items-start gap-3 py-3">
                     <span
                       aria-hidden="true"
-                      className={`mt-1.5 h-2.5 w-2.5 rounded-full shrink-0 ${
+                      className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
                         f.severity === 'red'
                           ? 'bg-red-600'
                           : f.severity === 'amber'
@@ -178,7 +346,7 @@ export default async function DashboardOverviewPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{f.title}</p>
                       {f.area_code ? (
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-0.5 text-xs text-muted-foreground">
                           {f.area_code} {areaName.get(f.area_code) ?? ''}
                         </p>
                       ) : null}
@@ -194,34 +362,39 @@ export default async function DashboardOverviewPage() {
         </Card>
 
         <div className="xl:col-span-2 space-y-6">
+          {scoreVisible && trend.length > 0 ? <ScoreTrend trend={trend} benchmark={benchmark} /> : null}
+
+          {scoreVisible && scoreChange && scoreChange.reasons.length > 0 ? (
+            <ScoreChangePanel change={scoreChange} />
+          ) : null}
+
+          <PlanPanel entitlements={ctx.entitlements} requestsUsed={requestsUsed} />
+
           <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display text-lg tracking-tight">Recent documents</h2>
-                <Link
-                  href="/dashboard/documents"
-                  className="text-xs text-[hsl(220,45%,45%)] hover:underline"
-                >
+                <Link href="/dashboard/documents" className="text-xs text-[hsl(220,45%,45%)] hover:underline">
                   View all
                 </Link>
               </div>
               {documents.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   Documents issued to you will appear here.
                 </p>
               ) : (
                 <ul className="divide-y">
                   {documents.slice(0, 4).map((d) => (
-                    <li key={d.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <li key={d.id} className="flex items-center justify-between gap-3 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{d.title}</p>
+                        <p className="truncate text-sm font-medium">{d.title}</p>
                         <p className="text-xs text-muted-foreground">
                           v{d.version} · {formatDate(d.issued_at)}
                         </p>
                       </div>
                       <a
                         href={`/api/files/download?type=document&id=${d.id}`}
-                        className="text-xs text-[hsl(220,45%,45%)] hover:underline shrink-0"
+                        className="shrink-0 text-xs text-[hsl(220,45%,45%)] hover:underline"
                       >
                         Download
                       </a>
@@ -234,17 +407,14 @@ export default async function DashboardOverviewPage() {
 
           <Card>
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-display text-lg tracking-tight">Upcoming deadlines</h2>
-                <Link
-                  href="/dashboard/calendar"
-                  className="text-xs text-[hsl(220,45%,45%)] hover:underline"
-                >
+                <Link href="/dashboard/calendar" className="text-xs text-[hsl(220,45%,45%)] hover:underline">
                   Calendar
                 </Link>
               </div>
               {events.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
+                <p className="py-4 text-center text-sm text-muted-foreground">
                   No upcoming compliance deadlines.
                 </p>
               ) : (
@@ -257,6 +427,52 @@ export default async function DashboardOverviewPage() {
                   ))}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-display text-lg tracking-tight">CQC says</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Live regulatory updates pulled into your dashboard.
+                  </p>
+                </div>
+                <Link href="/dashboard/alerts" className="text-xs text-[hsl(220,45%,45%)] hover:underline">
+                  View all
+                </Link>
+              </div>
+              {alerts.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  No published CQC alerts right now.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {alerts.slice(0, 4).map((alert) => (
+                    <li key={alert.id} className={`py-3 ${alert.isRead ? 'opacity-70' : ''}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{alert.title}</p>
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                            {alert.body}
+                          </p>
+                        </div>
+                        {!alert.isRead ? (
+                          <Badge className="shrink-0 bg-[hsl(220,45%,45%)] text-[hsl(36,33%,97%)]">
+                            New
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {unreadAlerts.length > 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {unreadAlerts.length} unread alert{unreadAlerts.length === 1 ? '' : 's'}.
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         </div>

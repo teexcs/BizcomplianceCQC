@@ -9,6 +9,7 @@ type BrandMarkProps = {
   label?: string;
   accent?: string;
   subtitle?: string;
+  accentClassName?: string;
 };
 
 export function BrandMark({
@@ -17,12 +18,13 @@ export function BrandMark({
   label = 'BizCompliance',
   accent = 'CQC',
   subtitle,
+  accentClassName,
 }: BrandMarkProps) {
   return (
     <Link href={href} className={cn('inline-flex flex-col items-start leading-none', className)}>
-      <span className="font-display text-lg md:text-xl font-semibold tracking-tight text-[hsl(220,33%,8%)]">
+      <span className="font-display text-lg md:text-xl lg:text-2xl font-semibold tracking-tight text-foreground">
         {label}
-        <span className="text-[hsl(220,33%,8%)]"> {accent}</span>
+        <span className={cn('text-foreground', accentClassName)}> {accent}</span>
       </span>
       {subtitle ? (
         <span className="mt-1 text-[10px] md:text-xs uppercase tracking-[0.22em] text-muted-foreground">

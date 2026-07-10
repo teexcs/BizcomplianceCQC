@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
-import { requireOrgSession } from '@/lib/data/session';
+import { createAdminClient, createClient } from '@/lib/supabase/server';
+import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
 import { rateLimit } from '@/lib/rate-limit';
 import { sendEmail, adminEmails } from '@/lib/email/send';
+import { formatQuota } from '@/lib/plans/entitlements';
 
 export interface ActionResult {
   ok: boolean;
@@ -26,6 +27,23 @@ export async function submitRequest(input: z.infer<typeof requestSchema>): Promi
   const ctx = await requireOrgSession();
   if (!rateLimit(`request:${ctx.userId}`, 10, 60 * 60 * 1000)) {
     return { ok: false, error: 'Too many requests — please try again later.' };
+  }
+
+  // Plan quota: document/support requests are a subscription entitlement.
+  const quota = ctx.entitlements.docRequestsPerMonth;
+  if (quota <= 0) {
+    return {
+      ok: false,
+      error:
+        'Document requests are part of a monthly plan. Add a plan from your account to start requesting document updates and support.',
+    };
+  }
+  const used = await getRequestUsageThisMonth(ctx.org.id);
+  if (used >= quota) {
+    return {
+      ok: false,
+      error: `You've used all ${formatQuota(quota)} of this month's requests on the ${ctx.entitlements.label} plan. Upgrade for more, or they reset next month.`,
+    };
   }
 
   const supabase = await createClient();
@@ -76,6 +94,38 @@ export async function markAlertRead(alertId: string, read: boolean): Promise<Act
   return { ok: true };
 }
 
+const clientCalendarSchema = z.object({
+  title: z.string().min(2).max(200),
+  description: z.string().max(2000).optional().or(z.literal('')),
+  kind: z.enum(['note', 'task', 'reminder', 'follow_up']),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export async function createClientCalendarEntry(
+  input: z.infer<typeof clientCalendarSchema>,
+): Promise<ActionResult> {
+  const parsed = clientCalendarSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Please complete the calendar entry details.' };
+
+  const ctx = await requireOrgSession();
+  const supabase = createAdminClient();
+  const { error } = await supabase.from('calendar_events').insert({
+    org_id: ctx.org.id,
+    title: parsed.data.title,
+    description: parsed.data.description || null,
+    event_type: parsed.data.kind,
+    due_date: parsed.data.due_date,
+    source: 'client',
+    created_by: ctx.userId,
+  });
+
+  if (error) return { ok: false, error: 'Could not save your calendar item.' };
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/calendar');
+  return { ok: true };
+}
+
 const orgSchema = z.object({
   name: z.string().min(2).max(120),
   service_type: z.string().min(2).max(60),
@@ -121,5 +171,55 @@ export async function updateProfile(input: z.infer<typeof profileSchema>): Promi
   if (error) return { ok: false, error: 'Could not save your profile.' };
 
   revalidatePath('/dashboard/account');
+  return { ok: true };
+}
+
+const socialProfileSchema = z.object({
+  category: z.enum(['social', 'messaging', 'reviews', 'directory', 'other']),
+  platform: z.string().min(1).max(80),
+  label: z.string().max(120).optional().or(z.literal('')),
+  handle: z.string().max(160).optional().or(z.literal('')),
+  url: z.string().max(300).optional().or(z.literal('')),
+  notes: z.string().max(300).optional().or(z.literal('')),
+});
+
+const socialProfilesSaveSchema = z.object({
+  profiles: z.array(socialProfileSchema),
+});
+
+export async function saveSocialProfiles(
+  input: z.infer<typeof socialProfilesSaveSchema>,
+): Promise<ActionResult> {
+  const parsed = socialProfilesSaveSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Please check the social profiles and try again.' };
+
+  const ctx = await requireOrgSession();
+  const supabase = createAdminClient();
+  const profiles = parsed.data.profiles
+    .map((row, index) => ({
+      org_id: ctx.org.id,
+      category: row.category,
+      platform: row.platform.trim(),
+      label: row.label?.trim() || null,
+      handle: row.handle?.trim() || null,
+      url: row.url?.trim() || null,
+      notes: row.notes?.trim() || null,
+      sort: index,
+    }))
+    .filter((row) => row.platform.length > 0);
+
+  const { error: deleteError } = await supabase
+    .from('social_profiles')
+    .delete()
+    .eq('org_id', ctx.org.id);
+  if (deleteError) return { ok: false, error: 'Could not update the social profiles.' };
+
+  if (profiles.length) {
+    const { error: insertError } = await supabase.from('social_profiles').insert(profiles);
+    if (insertError) return { ok: false, error: 'Could not update the social profiles.' };
+  }
+
+  revalidatePath('/dashboard/account');
+  revalidatePath('/admin/customers');
   return { ok: true };
 }

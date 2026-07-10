@@ -17,7 +17,16 @@ Admin login email: `bizcompliance@outlook.com` (auto-promoted to admin on signup
    the four private storage buckets (`library`, `evidence`, `deliverables`, `reports`).
 3. Do the same with `supabase/migrations/0002_seed_static.sql` — it seeds the 18 compliance
    areas and all 68 SAF interview questions.
-4. Sanity check: in Table Editor you should see ~25 tables; `library_areas` has 18 rows and
+4. Do the same with `supabase/migrations/0003_engine.sql` — it adds the audit-engine layer:
+   autopilot suggestion columns, 12-month document review cycles, the `engine_runs`
+   telemetry table, performance indexes and the `org_health` view.
+5. Do the same with `supabase/migrations/0004_engine_saf.sql` — it adds SAF cross-reference
+   suggestions, re-audit lineage columns, and the `audit_benchmark` function that lets clients
+   see where their score sits against the cohort without exposing anyone else's data.
+6. Do the same with `supabase/migrations/0005_website_scanner.sql` — it adds the
+   `website_scans` table behind the free public website scanner (leads land here with
+   their email, score and domain — readable from your admin account).
+7. Sanity check: in Table Editor you should see ~27 tables; `library_areas` has 18 rows and
    `saf_questions` has 68.
 
 ## 2. Seed the 139-document library (~3 min)
@@ -60,19 +69,24 @@ In the Supabase dashboard → **Authentication**:
 
 1. Create/sign in at https://dashboard.stripe.com — activate the account for live payments
    (business details, bank account).
-2. **Products** → create four products with GBP prices:
+2. **Products** → create these products with GBP prices:
    | Product | Price | Type |
    |---|---|---|
    | CQC Readiness Audit | £595 | One-off |
+   | Website Compliance Report | £8.99 | One-off |
    | Essentials | £49/month | Recurring |
    | Professional | £99/month | Recurring |
-   | Partner | £249/month | Recurring |
+   | Partner | £249/month | Recurring — *coming soon; create it now, buyers are blocked in-app until you flip `comingSoon` off in `src/lib/stripe/plans.ts`* |
 3. Copy each **price ID** (starts `price_…`) into `.env.local` (and later into Vercel):
    ```
    STRIPE_PRICE_AUDIT_ONEOFF=price_xxx
+   STRIPE_PRICE_WEBSITE_REPORT=price_xxx
    STRIPE_PRICE_ESSENTIALS_MONTHLY=price_xxx
+   STRIPE_PRICE_ESSENTIALS_ANNUAL=price_xxx
    STRIPE_PRICE_PROFESSIONAL_MONTHLY=price_xxx
+   STRIPE_PRICE_PROFESSIONAL_ANNUAL=price_xxx
    STRIPE_PRICE_PARTNER_MONTHLY=price_xxx
+   STRIPE_PRICE_PARTNER_ANNUAL=price_xxx
    ```
 4. **Developers → API keys**: copy the secret key into `STRIPE_SECRET_KEY=sk_live_…`
 5. If you want the website's one-off audit button to send people straight to your Stripe Payment Link, set:
@@ -89,6 +103,8 @@ When an audit is purchased the webhook automatically: records the purchase → c
 audit → snapshots the 139-item checklist + 68 SAF questions → creates your admin task →
 emails you and the client. Test with a Stripe test-mode purchase first if you like
 (use test keys + `stripe listen --forward-to localhost:3000/api/stripe/webhook`).
+Monthly plans are gated until an audit purchase exists for that organisation. If the test
+email override is used, the dashboard unlocks all plan features for local testing.
 
 ## 6. Resend (email) (~10 min)
 
@@ -114,6 +130,11 @@ emails you and the client. Test with a Stripe test-mode purchase first if you li
 3. Add your domain under **Settings → Domains** and point DNS at Vercel.
 4. After the first deploy, update the Stripe webhook URL (step 5.5) and the Supabase
    redirect URLs (step 3.1) to the live domain if you used placeholders.
+5. **Engine cron**: set `CRON_SECRET` in the Vercel env vars to a long random string
+   (e.g. `openssl rand -hex 32`). `vercel.json` already schedules `/api/cron/daily`
+   at 06:00 UTC — Vercel calls it with that secret automatically. The cron creates
+   document-review calendar events and tasks, flags overdue audits, and emails you a
+   daily briefing only when something needs attention.
 
 ## 8. First-run checklist (5 min, after deploy)
 
@@ -121,8 +142,12 @@ emails you and the client. Test with a Stripe test-mode purchase first if you li
       the "Start your readiness audit" welcome.
 - [ ] Buy the audit with Stripe **test card 4242 4242 4242 4242** (if testing in test mode)
       → audit appears in `/admin/audits`, task created, emails received.
-- [ ] Upload a PDF in the client's **Evidence Vault** → it appears in `/admin/evidence`.
-- [ ] In the workbench: mark a few checklist items, answer SAF questions, add a finding,
+- [ ] Upload a PDF in the client's **Evidence Vault** (name it like a real policy, e.g.
+      "Safeguarding Adults Policy.pdf") → it appears in `/admin/evidence`, and the matching
+      checklist item in the workbench already shows an engine suggestion.
+- [ ] In the workbench: press **Run engine** → suggestions appear on the checklist; press
+      **Accept all & draft findings** → statuses fill in, areas get RAG ratings, findings are
+      drafted and the score updates. Adjust anything manually, answer SAF questions,
       **Generate report**, review the PDF, **Publish** → client dashboard shows score, actions
       and the downloadable report.
 - [ ] In `/admin/library`: select documents → **Issue documents** → they appear in the client's
