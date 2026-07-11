@@ -140,8 +140,8 @@ export function HeroSignup() {
           Create your account
         </h2>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Sign-up Is Live Now. Your onboarding happens inside the dashboard after sign-up, where
-          you can upload evidence and track progress.
+          Your secure audit workspace opens after sign-up, where you can upload evidence, receive
+          your report and track progress.
         </p>
       </div>
 

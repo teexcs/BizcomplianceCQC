@@ -166,7 +166,7 @@ export default function HomePage() {
               <h1 className="mt-7 font-display text-[2.75rem] leading-[1.05] md:text-6xl lg:text-[4.25rem] tracking-tight text-foreground max-w-3xl">
                 Walk into your CQC inspection{' '}
                 <em className="not-italic md:italic text-primary">already knowing</em>{' '}
-                the outcome.
+                exactly where you stand.
               </h1>
 
               <p className="mt-7 text-lg md:text-xl text-muted-foreground leading-relaxed max-w-xl">
@@ -196,9 +196,16 @@ export default function HomePage() {
 
               <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3">
                 <div className="flex items-center gap-3">
-                  <span className="font-display text-3xl text-foreground">£{PLANS.audit.priceGbp}</span>
+                  <div className="flex flex-col">
+                    <span className="font-display text-sm text-muted-foreground line-through">
+                      £795
+                    </span>
+                    <span className="font-display text-3xl text-foreground">
+                      £{PLANS.audit.priceGbp}
+                    </span>
+                  </div>
                   <span className="text-sm text-muted-foreground leading-tight">
-                    one-off audit
+                    Limited-time rate
                     <br />
                     48-hour delivery
                   </span>
@@ -495,7 +502,15 @@ export default function HomePage() {
                 <p className="mt-3 text-sm leading-relaxed text-primary-foreground/75 flex-1">
                   {PLANS.audit.description}
                 </p>
-                <p className="mt-6 font-display text-5xl">£{PLANS.audit.priceGbp}</p>
+                <div className="mt-6 flex items-end gap-3">
+                  <span className="font-display text-sm text-primary-foreground/60 line-through">
+                    £795
+                  </span>
+                  <span className="font-display text-5xl">£{PLANS.audit.priceGbp}</span>
+                </div>
+                <p className="mt-2 text-xs uppercase tracking-[0.15em] text-primary-foreground/60">
+                  Limited-time rate
+                </p>
                 <div className="mt-6">
                   <CheckoutButton
                     planId="audit"

@@ -68,7 +68,15 @@ async function PublicPricingPage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
               <div>
                 <p className="text-xs uppercase tracking-[0.15em] opacity-70">Price</p>
-                <p className="font-display text-4xl leading-none">£{audit.priceGbp}</p>
+                <div className="flex items-end gap-3">
+                  <span className="font-display text-sm leading-none opacity-65 line-through">
+                    £795
+                  </span>
+                  <p className="font-display text-4xl leading-none">£{audit.priceGbp}</p>
+                </div>
+                <p className="mt-2 text-xs uppercase tracking-[0.15em] opacity-70">
+                  Limited-time rate
+                </p>
               </div>
               <CheckoutButton
                 planId="audit"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { RoundedBox, Text3D, Center, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -106,13 +106,14 @@ function Scene() {
 export function HeroFolio() {
   const [reducedMotion, setReducedMotion] = useState(false);
 
-  // Check for prefers-reduced-motion
-  if (typeof window !== 'undefined') {
+  useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (mq.matches && !reducedMotion) {
-      setReducedMotion(true);
-    }
-  }
+    const apply = () => setReducedMotion(mq.matches);
+
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   if (reducedMotion) {
     return (
