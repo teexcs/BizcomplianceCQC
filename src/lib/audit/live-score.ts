@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
-import { assignEvidence, type MatchCandidate } from '@/lib/engine/matcher';
+import { analyzeEvidenceByRef } from '@/lib/engine/reader/adapter';
 import { computeReadinessScore, REQUIREMENT_WEIGHT } from '@/lib/audit/scoring';
 import {
   diffReasons,
@@ -9,7 +9,6 @@ import {
   type ScoreReason,
 } from '@/lib/audit/live-score-core';
 import type { ItemStatus, RequirementLevel, SafQuestion, SafResponse } from '@/types/database';
-import type { VerificationResult } from '@/lib/evidence/verify';
 
 /**
  * Live readiness score.
@@ -51,9 +50,8 @@ interface ItemRow {
 interface EvidenceRow {
   id: string;
   file_name: string;
-  area_code: string | null;
+  extract_status: string | null;
   extracted_text: string | null;
-  verification: Partial<VerificationResult> | null;
   created_at: string;
 }
 
@@ -78,7 +76,7 @@ export async function computeLiveScore(
       .eq('audit_id', audit.id),
     admin
       .from('evidence_files')
-      .select('id, file_name, area_code, extracted_text, verification, created_at')
+      .select('id, file_name, extract_status, extracted_text, created_at')
       .eq('org_id', orgId)
       .eq('lifecycle_state', 'current')
       .neq('scan_status', 'infected'),
@@ -87,30 +85,20 @@ export async function computeLiveScore(
   const items = (itemsData as ItemRow[]) ?? [];
   if (items.length === 0) return null;
   const evidence = (evidenceData as EvidenceRow[]) ?? [];
-  const verificationById = new Map(evidence.map((e) => [e.id, e.verification]));
+
+  // Read every current document once with the same deterministic engine the
+  // audit workbench uses, so "why did my score move" always matches what the
+  // admin's own engine would find — no separate, weaker brain for this figure.
+  const signalByEvidenceId = new Map(
+    Array.from(analyzeEvidenceByRef(evidence).values()).map((v) => [v.evidenceId, v.signal]),
+  );
 
   // Renewals may only come from evidence uploaded AFTER delivery — so at the
   // moment of delivery the live score equals the delivered score exactly, and
   // a gap can only be "renewed" by a genuinely new document.
   const deliveredAt = audit.delivered_at ? new Date(audit.delivered_at).getTime() : 0;
-  const renewalEvidence = evidence.filter(
-    (e) => new Date(e.created_at).getTime() > deliveredAt,
-  );
-
-  const candidates: MatchCandidate[] = items.map((i) => ({
-    ref: i.ref,
-    areaCode: i.area_code,
-    title: i.title,
-    docType: '',
-  }));
-  const assignments = assignEvidence(
-    renewalEvidence.map((e) => ({
-      id: e.id,
-      fileName: e.file_name,
-      areaCode: e.area_code,
-      content: e.extracted_text,
-    })),
-    candidates,
+  const renewalSignalByRef = analyzeEvidenceByRef(
+    evidence.filter((e) => new Date(e.created_at).getTime() > deliveredAt),
   );
 
   const itemMeta = new Map<string, { title: string; requirement: RequirementLevel }>();
@@ -122,9 +110,8 @@ export async function computeLiveScore(
   for (const item of items) {
     // Aging is judged on the document the founder actually linked to this item;
     // renewal on the best current match in the vault for a gap.
-    const linked = item.evidence_id ? verificationById.get(item.evidence_id) ?? null : null;
-    const match = assignments.get(item.ref);
-    const renewal = match ? verificationById.get(match.evidenceId) ?? null : null;
+    const linked = item.evidence_id ? signalByEvidenceId.get(item.evidence_id) ?? null : null;
+    const renewal = renewalSignalByRef.get(item.ref)?.signal ?? null;
     const status = liveItemStatus(item.status, linked, renewal);
 
     itemMeta.set(item.ref, { title: item.title, requirement: item.requirement });

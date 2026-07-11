@@ -48,11 +48,13 @@ and unreadable files — none of which the old matcher did.
   *apply → RAG → findings → score* pipeline that the reader's suggestions flow
   into). One brain decides; this turns decisions into the deliverable.
 
-## The one remaining use of the old matcher (intentional)
+## Update: matcher.ts fully removed
 
-`src/lib/engine/matcher.ts` is **still used by `src/lib/audit/live-score.ts`** —
-the continuous "current readiness" figure on the client dashboard that drifts as
-documents age or are renewed between formal audits. That is a fast, rough
-estimate, not the formal audit verdict, so the lightweight matcher is acceptable
-there. If you ever want the live score to be as strict as the audit, migrate
-`live-score.ts` onto the reader too and then `matcher.ts` can be deleted entirely.
+`src/lib/audit/live-score.ts` (the continuous "current readiness" figure that
+drifts on the client dashboard as documents age or are renewed) was migrated
+onto the reader too, via `analyzeEvidenceByRef` in
+`src/lib/engine/reader/adapter.ts`. `src/lib/engine/matcher.ts` had no remaining
+callers and has been deleted. The client-visible live score and the admin's
+formal audit engine now read documents the same, deterministic way — no more
+split-brain between what the admin's engine finds and what the client's score
+reflects.

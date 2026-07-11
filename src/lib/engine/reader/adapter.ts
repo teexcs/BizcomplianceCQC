@@ -305,6 +305,41 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
   return stats;
 }
 
+/** Minimal evidence signal shape shared with live-score-core.ts's EvidenceSignal. */
+export interface ReaderSignal {
+  reviewDate: string | null;
+  isTemplate: boolean;
+}
+
+/**
+ * Analyse a batch of evidence rows with the reader and index the result by
+ * library reference — the shared building block for both the audit engine
+ * (runReaderSuggest) and the live-readiness "renewal" check (live-score.ts),
+ * so both read documents the same, deterministic way.
+ */
+export function analyzeEvidenceByRef(
+  rows: EvidenceRow[],
+): Map<string, { evidenceId: string; fileName: string; signal: ReaderSignal }> {
+  const byRef = new Map<string, { evidenceId: string; fileName: string; signal: ReaderSignal }>();
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) continue;
+    const cls = classify(doc);
+    const ref = cls.ref ?? refFromName(e.file_name);
+    if (!ref || byRef.has(ref)) continue;
+    const result = analyzeDocument(doc, cls);
+    const isTemplate = result.redFlags.some(
+      (f) => f.severity === 'critical' && (f.id === 'unfilled-placeholder' || f.id === 'template-artifact'),
+    );
+    byRef.set(ref, {
+      evidenceId: e.id,
+      fileName: e.file_name,
+      signal: { reviewDate: result.review?.date ?? null, isTemplate },
+    });
+  }
+  return byRef;
+}
+
 /**
  * The INTERNAL analysis — the reader's full "everything, quoted" report for the
  * auditor to review before issuing anything to the client. Read-only: it reads

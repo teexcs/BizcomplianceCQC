@@ -295,52 +295,54 @@ function SuggestionChip({ item }: { item: AuditItem }) {
     item.suggestion_confidence != null ? ` · ${Math.round(item.suggestion_confidence * 100)}%` : '';
 
   return (
-    <div className="mt-2 ml-[4.25rem] flex flex-wrap items-center gap-2">
-      <span
-        className={cn(
-          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px]',
-          isPresent
-            ? 'bg-[hsl(220,45%,55%)]/12 text-[hsl(220,60%,75%)]'
-            : 'bg-muted text-muted-foreground',
-        )}
-      >
-        <Zap size={11} aria-hidden="true" />
-        Engine: {ITEM_STATUS_LABELS[item.suggested_status]}
-        {confidence}
-        {item.suggestion_reason ? (
-          <span className="text-muted-foreground/80 max-w-[340px] truncate">
-            — {item.suggestion_reason}
-          </span>
-        ) : null}
-      </span>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() =>
-          startTransition(async () => {
-            await acceptSuggestion(item.id);
-            router.refresh();
-          })
-        }
-        aria-label={`Accept suggestion for ${item.ref}`}
-        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors disabled:opacity-50"
-      >
-        <Check size={11} aria-hidden="true" /> Accept
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() =>
-          startTransition(async () => {
-            await dismissSuggestion(item.id);
-            router.refresh();
-          })
-        }
-        aria-label={`Dismiss suggestion for ${item.ref}`}
-        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-      >
-        <X size={11} aria-hidden="true" /> Dismiss
-      </button>
+    <div className="mt-2 ml-[4.25rem] space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium',
+            isPresent
+              ? 'bg-[hsl(220,45%,55%)]/12 text-[hsl(220,60%,75%)]'
+              : 'bg-muted text-muted-foreground',
+          )}
+        >
+          <Zap size={11} aria-hidden="true" />
+          Engine: {ITEM_STATUS_LABELS[item.suggested_status]}
+          {confidence}
+        </span>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            startTransition(async () => {
+              await acceptSuggestion(item.id);
+              router.refresh();
+            })
+          }
+          aria-label={`Accept suggestion for ${item.ref}`}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          <Check size={11} aria-hidden="true" /> Accept
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            startTransition(async () => {
+              await dismissSuggestion(item.id);
+              router.refresh();
+            })
+          }
+          aria-label={`Dismiss suggestion for ${item.ref}`}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+        >
+          <X size={11} aria-hidden="true" /> Dismiss
+        </button>
+      </div>
+      {item.suggestion_reason ? (
+        <p className="max-w-[640px] text-[11px] leading-relaxed text-muted-foreground/90">
+          {item.suggestion_reason}
+        </p>
+      ) : null}
     </div>
   );
 }

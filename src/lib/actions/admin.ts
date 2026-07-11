@@ -226,6 +226,10 @@ export async function setAuditStatus(
   summary?: string,
 ): Promise<ActionResult> {
   await requireAdminSession();
+  if (status === 'delivered') {
+    const readiness = await checkAuditReadyToDeliver(auditId);
+    if (!readiness.ready) return fail(readiness.reason ?? 'This audit is not ready to deliver yet.');
+  }
   const supabase = await createClient();
   const update: Record<string, unknown> = { status };
   if (summary !== undefined) update.summary = summary;
@@ -292,6 +296,47 @@ async function recalculateAudit(auditId: string): Promise<number | null> {
   );
   await supabase.from('audits').update({ score }).eq('id', auditId);
   return score;
+}
+
+/**
+ * Guards the two irreversible-feeling moments — generating/publishing a report
+ * and marking an audit delivered — against going out with an unreviewed
+ * checklist. A 0/100 report with nothing assessed is a genuine "0 legal/CQC
+ * documents reviewed" state, not a stub: catch it before it reaches a client.
+ */
+async function checkAuditReadyToDeliver(auditId: string): Promise<{ ready: boolean; reason?: string }> {
+  const admin = createAdminClient();
+  const { count: total } = await admin
+    .from('audit_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('audit_id', auditId);
+  const { count: decided } = await admin
+    .from('audit_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('audit_id', auditId)
+    .neq('status', 'unset');
+  const { count: ragged } = await admin
+    .from('audit_areas')
+    .select('id', { count: 'exact', head: true })
+    .eq('audit_id', auditId)
+    .neq('rag', 'unset');
+
+  const t = total ?? 0;
+  const d = decided ?? 0;
+  if (t === 0) return { ready: false, reason: 'This audit has no checklist items yet.' };
+  if (d === 0) {
+    return {
+      ready: false,
+      reason: 'No checklist items have been reviewed yet — run the engine and review the checklist before delivering.',
+    };
+  }
+  if ((ragged ?? 0) === 0) {
+    return {
+      ready: false,
+      reason: 'No compliance areas have a RAG rating yet — apply suggested RAGs or set them manually before delivering.',
+    };
+  }
+  return { ready: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +559,20 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
 export async function publishReport(reportId: string): Promise<ActionResult> {
   await requireAdminSession();
   const admin = createAdminClient();
+
+  const { data: reportRow } = await admin
+    .from('reports')
+    .select('audit_id')
+    .eq('id', reportId)
+    .single<{ audit_id: string }>();
+  if (!reportRow) return fail('Report not found.');
+
+  const readiness = await checkAuditReadyToDeliver(reportRow.audit_id);
+  if (!readiness.ready) {
+    return fail(
+      `Can't publish to the client yet — ${readiness.reason ?? 'the audit is not ready to deliver.'}`,
+    );
+  }
 
   const { data: report, error } = await admin
     .from('reports')

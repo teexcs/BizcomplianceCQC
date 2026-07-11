@@ -178,21 +178,25 @@ function SafSuggestion({
 }) {
   const label = ANSWER_OPTIONS.find((o) => o.value === resp.suggested_answer)?.label ?? '';
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-[11px] text-muted-foreground">
-        <Zap size={11} aria-hidden="true" />
-        Engine: {label}
-        {resp.suggestion_reason ? (
-          <span className="max-w-[360px] truncate">— {resp.suggestion_reason}</span>
-        ) : null}
-      </span>
-      <button
-        type="button"
-        onClick={() => onAccept(resp, resp.suggested_answer)}
-        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors"
-      >
-        <Check size={11} aria-hidden="true" /> Accept
-      </button>
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          <Zap size={11} aria-hidden="true" />
+          Engine: {label}
+        </span>
+        <button
+          type="button"
+          onClick={() => onAccept(resp, resp.suggested_answer)}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted transition-colors"
+        >
+          <Check size={11} aria-hidden="true" /> Accept
+        </button>
+      </div>
+      {resp.suggestion_reason ? (
+        <p className="max-w-[640px] text-[11px] leading-relaxed text-muted-foreground/90">
+          {resp.suggestion_reason}
+        </p>
+      ) : null}
     </div>
   );
 }
