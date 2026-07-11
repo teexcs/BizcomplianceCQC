@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
+import { DOMICILIARY_ONLY } from '@/lib/site-focus';
 
 function useScrollReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -27,13 +28,17 @@ function ScrollReveal({ children, className, delay = 0 }: { children: React.Reac
   );
 }
 
-const sectors = [
+const allSectors = [
   { slug: 'domiciliary-care', title: 'Domiciliary care', desc: 'Lone working, medicines in the home, Schedule 3 recruitment files and travel-buffered rotas — our deepest pack, built for all 18 CQC areas.', icon: '' },
   { slug: 'supported-living', title: 'Supported living', desc: 'Mental capacity, best-interests decisions, positive risk-taking and genuinely person-centred planning evidence.', icon: '' },
   { slug: 'care-home', title: 'Residential care homes', desc: 'Premises safety, IPC, dependency-based staffing, controlled drugs governance and the full medicines cycle.', icon: '' },
   { slug: 'clinic', title: 'Clinics & treatment services', desc: 'Consent records, duty of candour, statutory notifications and governance for independent healthcare.', icon: '' },
   { slug: 'new-provider', title: 'New providers', desc: 'Pre-registration document foundations, Statement of Purpose and registered manager evidence that stand up to CQC scrutiny.', icon: '' },
 ];
+
+const sectors = DOMICILIARY_ONLY
+  ? allSectors.filter((s) => s.slug === 'domiciliary-care')
+  : allSectors;
 
 export default function SectorsPage() {
   return (
@@ -42,15 +47,21 @@ export default function SectorsPage() {
         <ScrollReveal>
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">Services we cover</p>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl tracking-tight mb-6">
-            Built for CQC-registered care services
+            {DOMICILIARY_ONLY ? 'Built for domiciliary care' : 'Built for CQC-registered care services'}
           </h1>
           <p className="text-lg text-muted-foreground leading-relaxed mb-16 max-w-2xl">
-            Every service type is inspected on the same Fundamental Standards, but the evidence
-            that proves them differs. Choose your service to see what your audit covers.
+            {DOMICILIARY_ONLY
+              ? 'We audit against the same Fundamental Standards every CQC-registered service is inspected on, with a library built domiciliary-care-first — lone working, medicines in the home, and the evidence that actually gets checked at inspection.'
+              : 'Every service type is inspected on the same Fundamental Standards, but the evidence that proves them differs. Choose your service to see what your audit covers.'}
           </p>
         </ScrollReveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-6',
+            DOMICILIARY_ONLY ? 'md:grid-cols-1 max-w-xl' : 'md:grid-cols-2 lg:grid-cols-3',
+          )}
+        >
           {sectors.map((sector, i) => (
             <ScrollReveal key={sector.slug} delay={i * 80}>
               <Link href={`/sectors/${sector.slug}`}>

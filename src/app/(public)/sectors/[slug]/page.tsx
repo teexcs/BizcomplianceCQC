@@ -2,10 +2,11 @@
 
 import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { DOMICILIARY_ONLY } from '@/lib/site-focus';
 
 function useScrollReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -146,15 +147,30 @@ const sectorData: Record<string, {
 
 export default function SectorDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const slug = params.slug as string;
-  const sector = sectorData[slug];
+  const outOfFocus = DOMICILIARY_ONLY && slug !== 'domiciliary-care';
+  const sector = outOfFocus ? undefined : sectorData[slug];
+
+  useEffect(() => {
+    // Sector content isn't deleted, just out of scope for the current
+    // domiciliary-only launch — send direct links back to the sectors index
+    // rather than showing a pack the site isn't positioned to sell right now.
+    if (outOfFocus) router.replace('/sectors');
+  }, [outOfFocus, router]);
 
   if (!sector) {
     return (
       <div className="py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-12 text-center">
-          <h1 className="font-display text-3xl mb-4">Sector not found</h1>
-          <p className="text-muted-foreground mb-8">We couldn&apos;t find the sector you&apos;re looking for.</p>
+          <h1 className="font-display text-3xl mb-4">
+            {outOfFocus ? 'Redirecting…' : 'Sector not found'}
+          </h1>
+          <p className="text-muted-foreground mb-8">
+            {outOfFocus
+              ? "We're currently focused on domiciliary care."
+              : "We couldn't find the sector you're looking for."}
+          </p>
           <Link href="/sectors" className="text-[hsl(220,45%,45%)] hover:underline">View all sectors</Link>
         </div>
       </div>
