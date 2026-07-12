@@ -83,8 +83,9 @@ export function reportPublishedEmail(businessName: string, score: number) {
     html: layout(
       'Your audit report is ready',
       p(`${escapeHtml(businessName)}, your CQC Readiness Audit is complete.`) +
-        p(`<strong>Readiness score: ${score}/100.</strong> Your report includes red / amber / green findings for each compliance area and a priority action plan.`) +
-        button(`${SITE_URL()}/dashboard`, 'View your report'),
+        p(`<strong>Readiness score: ${score}/100.</strong> Your report includes red / amber / green findings for each compliance area, your scores on CQC's five key questions, and a priority action plan.`) +
+        p('The full report is a PDF you can download and keep — it stays available on your dashboard, and every published version remains under Account → Audit reports.') +
+        button(`${SITE_URL()}/dashboard`, 'View and download your report'),
     ),
   };
 }

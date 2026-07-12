@@ -9,7 +9,11 @@ import type {
   Organisation,
   RagStatus,
 } from '@/types/database';
-import { FINDING_PRIORITY_LABELS } from '@/lib/audit/scoring';
+import {
+  FINDING_PRIORITY_LABELS,
+  type SafDomainScore,
+  type ScoreBreakdown,
+} from '@/lib/audit/scoring';
 
 const COLORS = {
   ink: '#111722',
@@ -109,10 +113,15 @@ export interface ReportData {
   libraryAreas: LibraryArea[];
   findings: AuditFinding[];
   score: number;
+  /** The five key questions (SAF) scored per domain; null scores = not assessed. */
+  domainScores?: SafDomainScore[];
+  /** Full harsh-marking breakdown — drives the cap note and halves line. */
+  breakdown?: ScoreBreakdown | null;
 }
 
 function ReportDoc({ data }: { data: ReportData }) {
-  const { organisation, areas, libraryAreas, findings, score, audit } = data;
+  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown } =
+    data;
   const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
   const counts = {
     green: areas.filter((a) => a.rag === 'green').length,
@@ -168,10 +177,84 @@ function ReportDoc({ data }: { data: ReportData }) {
           </View>
         </View>
 
+        {breakdown?.capReason ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: COLORS.red,
+              borderRadius: 6,
+              padding: 10,
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5, color: COLORS.red, marginBottom: 2 }}>
+              Score capped at {breakdown.capValue}
+            </Text>
+            <Text style={{ fontSize: 9, color: '#333a47', lineHeight: 1.5 }}>
+              {breakdown.capReason} This audit is marked strictly: no other strength offsets a
+              gap an inspector would treat as fundamental.
+            </Text>
+          </View>
+        ) : null}
+
+        {breakdown ? (
+          <Text style={{ fontSize: 9, color: COLORS.muted, marginBottom: 14 }}>
+            Score composition: documents &amp; evidence {Math.round(breakdown.doc.scored * 100)}/100
+            ({Math.round(breakdown.docShare * 100)}% weight) · SAF inspection interview{' '}
+            {breakdown.saf.answered > 0 ? `${Math.round(breakdown.saf.scored * 100)}/100` : 'not assessed'}{' '}
+            ({Math.round(breakdown.safShare * 100)}% weight). Legally-required items weigh ×3;
+            out-of-date documents earn 25% credit; priority interview questions weigh ×3.
+          </Text>
+        ) : null}
+
         {audit.summary ? (
           <View>
             <Text style={styles.h2}>Executive summary</Text>
             <Text style={styles.para}>{audit.summary}</Text>
+          </View>
+        ) : null}
+
+        {domainScores && domainScores.length > 0 ? (
+          <View>
+            <Text style={styles.h2}>The five key questions (CQC Single Assessment Framework)</Text>
+            {domainScores.map((d) => (
+              <View key={d.domain} style={styles.areaRow} wrap={false}>
+                <Text style={styles.areaName}>{d.label}</Text>
+                <View
+                  style={{
+                    width: 160,
+                    height: 6,
+                    backgroundColor: '#e9e4d8',
+                    borderRadius: 3,
+                    marginRight: 10,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: d.score != null ? `${Math.min(100, d.score * 10)}%` : '0%',
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor:
+                        d.score == null
+                          ? '#e9e4d8'
+                          : d.score >= 7.5
+                            ? COLORS.green
+                            : d.score >= 5
+                              ? COLORS.amber
+                              : COLORS.red,
+                    }}
+                  />
+                </View>
+                <Text style={[styles.rag, { color: COLORS.ink, width: 80 }]}>
+                  {d.score != null ? `${d.score.toFixed(1)}/10` : 'Not assessed'}
+                  {d.priorityFails > 0 ? `  (${d.priorityFails}★ fail${d.priorityFails === 1 ? '' : 's'})` : ''}
+                </Text>
+              </View>
+            ))}
+            <Text style={{ fontSize: 8, color: COLORS.muted, marginTop: 4, marginBottom: 6 }}>
+              Scored from the {breakdown?.saf.total ?? 68}-question SAF interview. ★ marks
+              priority questions — the rapid-triage questions an inspection turns on.
+            </Text>
           </View>
         ) : null}
 

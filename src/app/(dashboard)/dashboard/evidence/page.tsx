@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { requireOrgSession } from '@/lib/data/session';
 import { getEvidenceFiles } from '@/lib/data/client';
+import { getVaultCoverage } from '@/lib/engine/reader/adapter';
 import { EvidenceUploader } from '@/components/dashboard/evidence-uploader';
 import { formatDate } from '@/lib/utils';
 
@@ -36,13 +37,14 @@ function ageLabel(date: string): string {
 
 export default async function EvidencePage() {
   const ctx = await requireOrgSession();
-  const files = await getEvidenceFiles(ctx.org.id);
+  const [files, coverage] = await Promise.all([
+    getEvidenceFiles(ctx.org.id),
+    getVaultCoverage(ctx.org.id),
+  ]);
   const currentFiles = files.filter((f) => f.lifecycle_state !== 'superseded');
   const supersededFiles = files.filter((f) => f.lifecycle_state === 'superseded');
-  const uploadGoal = 10;
-  const uploadCount = currentFiles.length;
-  const filledBars = Math.min(uploadCount, uploadGoal);
-  const uploadPct = Math.round((filledBars / uploadGoal) * 100);
+  const coveragePct =
+    coverage.libraryTotal > 0 ? Math.round((coverage.matched / coverage.libraryTotal) * 100) : 0;
   const unsorted = currentFiles.filter((f) => !f.area_code);
   const pending = currentFiles.filter((f) => f.review_status === 'pending');
   const reviewed = currentFiles.filter((f) => f.review_status === 'reviewed');
@@ -128,22 +130,49 @@ export default async function EvidencePage() {
           </div>
         ) : null}
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Upload progress</span>
-            <span>{uploadCount}/{uploadGoal} current files</span>
+        <div className="rounded-none border border-border bg-card p-4 space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-medium">Library coverage</p>
+            <p className="text-xs text-muted-foreground">
+              Matched automatically against the {coverage.libraryTotal}-document compliance library
+            </p>
           </div>
-          <div className="grid grid-cols-10 gap-1">
-            {Array.from({ length: uploadGoal }).map((_, i) => (
-              <span
-                key={i}
-                className={`h-2.5 rounded-full ${
-                  i < filledBars ? 'bg-[hsl(220,50%,15%)]' : 'bg-border'
-                }`}
-              />
-            ))}
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-[hsl(220,50%,15%)] transition-all"
+              style={{ width: `${Math.max(coveragePct, coverage.matched > 0 ? 2 : 0)}%` }}
+            />
           </div>
-          <p className="text-xs text-muted-foreground">{uploadPct}% complete</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <p className="text-lg font-display leading-none">
+                {coverage.matched}
+                <span className="text-sm text-muted-foreground">/{coverage.libraryTotal}</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">library documents matched</p>
+            </div>
+            <div>
+              <p className="text-lg font-display leading-none">
+                {coverage.legalMatched}
+                <span className="text-sm text-muted-foreground">/{coverage.legalTotal}</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">legally-required documents</p>
+            </div>
+            <div>
+              <p className="text-lg font-display leading-none">
+                {coverage.areasCovered}
+                <span className="text-sm text-muted-foreground">/{coverage.areasTotal}</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">CQC areas with evidence</p>
+            </div>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            You don&apos;t need everything before your audit — we review whatever is here and flag
+            every gap CQC might. Anything missing becomes your priority action plan.
+            {coverage.unreadableFiles > 0
+              ? ` ${coverage.unreadableFiles} file${coverage.unreadableFiles === 1 ? '' : 's'} (scans/images) can't be machine-read and will be reviewed by your auditor directly.`
+              : ''}
+          </p>
         </div>
 
         {stalePending.length ? (

@@ -305,6 +305,80 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
   return stats;
 }
 
+export interface VaultCoverage {
+  /** Distinct library documents matched by readable evidence in the vault. */
+  matched: number;
+  /** Total documents in the live library (146 today; grows with the library). */
+  libraryTotal: number;
+  /** Legally-required documents matched / total. */
+  legalMatched: number;
+  legalTotal: number;
+  /** CQC areas (of 18) with at least one matched document. */
+  areasCovered: number;
+  areasTotal: number;
+  /** Files uploaded but not machine-readable yet (still count for the human audit). */
+  unreadableFiles: number;
+  currentFiles: number;
+}
+
+/**
+ * Real, engine-computed coverage of the org's evidence vault against the live
+ * library — the honest replacement for any arbitrary "N files uploaded" bar.
+ * Classification-only (no full line scan), so it's cheap enough for page loads.
+ *
+ * Deliberately guidance, not a gate: the audit reviews whatever the client has
+ * and hunts for everything CQC might flag — gaps are findings, not blockers.
+ */
+export async function getVaultCoverage(orgId: string): Promise<VaultCoverage> {
+  const admin = createAdminClient();
+  const [{ data: evidence }, { data: assets }, { count: areasTotal }] = await Promise.all([
+    admin
+      .from('evidence_files')
+      .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
+      .eq('org_id', orgId)
+      .eq('lifecycle_state', 'current')
+      .neq('scan_status', 'infected'),
+    admin.from('library_assets').select('ref, area_code, requirement'),
+    admin.from('library_areas').select('code', { count: 'exact', head: true }),
+  ]);
+
+  const rows = (evidence as EvidenceRow[]) ?? [];
+  const library = (assets as { ref: string; area_code: string; requirement: string }[]) ?? [];
+  const byRef = new Map(library.map((a) => [a.ref, a]));
+
+  const matchedRefs = new Set<string>();
+  let unreadableFiles = 0;
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) {
+      unreadableFiles++;
+      continue;
+    }
+    const cls = classify(doc);
+    const ref = cls.ref ?? refFromName(e.file_name);
+    if (ref && byRef.has(ref)) matchedRefs.add(ref);
+  }
+
+  const legalRefs = library.filter((a) => a.requirement === 'legal');
+  const legalMatched = legalRefs.filter((a) => matchedRefs.has(a.ref)).length;
+  const areaSet = new Set<string>();
+  for (const ref of matchedRefs) {
+    const asset = byRef.get(ref);
+    if (asset) areaSet.add(asset.area_code);
+  }
+
+  return {
+    matched: matchedRefs.size,
+    libraryTotal: library.length,
+    legalMatched,
+    legalTotal: legalRefs.length,
+    areasCovered: areaSet.size,
+    areasTotal: areasTotal ?? 18,
+    unreadableFiles,
+    currentFiles: rows.length,
+  };
+}
+
 /** Minimal evidence signal shape shared with live-score-core.ts's EvidenceSignal. */
 export interface ReaderSignal {
   reviewDate: string | null;

@@ -14,7 +14,7 @@ export interface ScoreFactors {
   itemStatuses: Record<string, ItemStatus>;
   /** Sum of requirement weights over answered doc items (for delta maths). */
   docWeightSum: number;
-  /** Document half of the blended score: 0.6 when SAF answered, else 1. */
+  /** Document half of the blended score: DOC_SHARE when SAF answered, else 1. */
   docShare: number;
   counts: { present: number; outOfDate: number; missing: number; legalBreaches: number };
 }

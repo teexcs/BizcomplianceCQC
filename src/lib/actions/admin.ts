@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { requireAdminSession } from '@/lib/data/session';
-import { computeReadinessScore, suggestAreaRag } from '@/lib/audit/scoring';
+import {
+  computeReadinessScore,
+  computeScoreBreakdown,
+  safDomainScores,
+  suggestAreaRag,
+} from '@/lib/audit/scoring';
 import { renderAuditReportPdf } from '@/lib/report/generate';
 import { sendEmail } from '@/lib/email/send';
 import {
@@ -12,7 +17,8 @@ import {
   reportPublishedEmail,
   requestUpdateEmail,
 } from '@/lib/email/templates';
-import { siteVisitQuotaForPlan, formatQuota } from '@/lib/plans/entitlements';
+import { entitlementsFor, siteVisitQuotaForPlan, formatQuota } from '@/lib/plans/entitlements';
+import { buildOrgPatchValues, personalizeDocx } from '@/lib/documents/personalize';
 import type { PlanId } from '@/lib/stripe/plans';
 import type {
   Audit,
@@ -390,6 +396,29 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
   if (!org) return fail('Organisation not found.');
   if (!assets?.length) return fail('No matching library documents.');
 
+  // Plan gate: Professional/Partner clients receive documents personalised
+  // from their org record; Essentials (and pay-as-you-go) receive the
+  // original templates with [PLACEHOLDER]s to complete themselves.
+  const [{ data: activeSub }, { data: ownerProfile }] = await Promise.all([
+    admin
+      .from('subscriptions')
+      .select('plan, status')
+      .eq('org_id', org.id)
+      .in('status', ['active', 'trialing', 'past_due'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle<{ plan: PlanId; status: string }>(),
+    admin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', org.owner_id)
+      .single<{ email: string; full_name: string | null }>(),
+  ]);
+  const personalise = entitlementsFor(activeSub?.plan ?? null).personalisedDocuments;
+  const patchValues = personalise
+    ? buildOrgPatchValues(org, ownerProfile?.full_name ?? null)
+    : null;
+
   if (parsed.data.auditId) {
     const { data: audit } = await admin
       .from('audits')
@@ -419,11 +448,22 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
       continue;
     }
 
+    let payload: Buffer = Buffer.from(await file.arrayBuffer());
+    let personalised = false;
+    if (patchValues) {
+      const filled = await personalizeDocx(payload, patchValues);
+      if (filled) {
+        payload = filled;
+        personalised = true;
+      }
+      // On failure the original template is issued — personalisation never blocks.
+    }
+
     const fileName = `${asset.ref}-${asset.current_version}.docx`;
     const destPath = `${org.id}/${parsed.data.auditId ?? 'general'}/${fileName}`;
     const { error: upError } = await admin.storage
       .from('deliverables')
-      .upload(destPath, Buffer.from(await file.arrayBuffer()), {
+      .upload(destPath, payload, {
         contentType:
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
@@ -448,7 +488,9 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
       storage_path: destPath,
       file_name: fileName,
       version: `${asset.current_version}.0`,
-      note: parsed.data.note ?? null,
+      note: personalised
+        ? [parsed.data.note, `Personalised for ${org.name}.`].filter(Boolean).join(' ')
+        : parsed.data.note ?? null,
       issued_by: ctx.userId,
     });
     if (insError) {
@@ -459,14 +501,9 @@ export async function issueDocuments(input: z.infer<typeof issueSchema>): Promis
   }
 
   if (issued > 0) {
-    const { data: owner } = await admin
-      .from('profiles')
-      .select('email')
-      .eq('id', org.owner_id)
-      .single<{ email: string }>();
-    if (owner?.email) {
+    if (ownerProfile?.email) {
       const tpl = documentsIssuedEmail(org.name, issued);
-      void sendEmail({ to: owner.email, subject: tpl.subject, html: tpl.html });
+      void sendEmail({ to: ownerProfile.email, subject: tpl.subject, html: tpl.html });
     }
     await admin.from('activity_log').insert({
       org_id: org.id,
@@ -495,13 +532,23 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
   await requireAdminSession();
   const admin = createAdminClient();
 
-  const [{ data: audit }, { data: areas }, { data: libraryAreas }, { data: findings }] =
-    await Promise.all([
-      admin.from('audits').select('*').eq('id', auditId).single<Audit>(),
-      admin.from('audit_areas').select('*').eq('audit_id', auditId),
-      admin.from('library_areas').select('*').order('sort'),
-      admin.from('audit_findings').select('*').eq('audit_id', auditId).order('sort'),
-    ]);
+  const [
+    { data: audit },
+    { data: areas },
+    { data: libraryAreas },
+    { data: findings },
+    { data: items },
+    { data: safResponses },
+    { data: safQuestions },
+  ] = await Promise.all([
+    admin.from('audits').select('*').eq('id', auditId).single<Audit>(),
+    admin.from('audit_areas').select('*').eq('audit_id', auditId),
+    admin.from('library_areas').select('*').order('sort'),
+    admin.from('audit_findings').select('*').eq('audit_id', auditId).order('sort'),
+    admin.from('audit_items').select('requirement, status').eq('audit_id', auditId),
+    admin.from('saf_responses').select('question_id, answer').eq('audit_id', auditId),
+    admin.from('saf_questions').select('id, domain, priority'),
+  ]);
   if (!audit) return fail('Audit not found.');
 
   const { data: org } = await admin
@@ -511,7 +558,20 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     .single<Organisation>();
   if (!org) return fail('Organisation not found.');
 
-  const score = (await recalculateAudit(auditId)) ?? audit.score ?? 0;
+  // One computation feeds the stored score, the cap note, the halves line and
+  // the five-key-questions section — so the PDF can never disagree with itself.
+  const breakdown = computeScoreBreakdown(
+    (items as Pick<AuditItem, 'requirement' | 'status'>[]) ?? [],
+    (safResponses as Pick<SafResponse, 'question_id' | 'answer'>[]) ?? [],
+    (safQuestions as Pick<SafQuestion, 'id' | 'priority'>[]) ?? [],
+  );
+  const score = breakdown.score;
+  await admin.from('audits').update({ score }).eq('id', auditId);
+
+  const domainScores = safDomainScores(
+    (safResponses as Pick<SafResponse, 'question_id' | 'answer'>[]) ?? [],
+    (safQuestions as Pick<SafQuestion, 'id' | 'domain' | 'priority'>[]) ?? [],
+  );
 
   const pdf = await renderAuditReportPdf({
     audit,
@@ -520,6 +580,8 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     libraryAreas: (libraryAreas as LibraryArea[]) ?? [],
     findings: (findings as AuditFinding[]) ?? [],
     score,
+    domainScores,
+    breakdown,
   });
 
   const { data: prev } = await admin

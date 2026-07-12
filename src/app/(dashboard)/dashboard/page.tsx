@@ -13,12 +13,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { PlanPanel } from '@/components/dashboard/plan-panel';
 import { ScoreTrend } from '@/components/dashboard/score-trend';
 import { ScoreChangePanel } from '@/components/dashboard/score-change-panel';
+import { ScoreBreakdownPanel } from '@/components/dashboard/score-breakdown';
 import { ScoreDial, ScoreBarRow } from '@/components/score-dial';
 import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
 import {
   getCalendarEvents,
   getAlerts,
-  getEvidenceFiles,
   getIssuedDocuments,
   getLatestAudit,
   getLibraryAreas,
@@ -27,7 +27,9 @@ import {
   getLatestScoreChange,
   getSafDomainScores,
   getAuditCompleteness,
+  getScoreBreakdown,
 } from '@/lib/data/client';
+import { getVaultCoverage } from '@/lib/engine/reader/adapter';
 import { ragCounts, AUDIT_STATUS_LABELS, FINDING_PRIORITY_LABELS } from '@/lib/audit/scoring';
 import { formatDate } from '@/lib/utils';
 
@@ -35,9 +37,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function DashboardOverviewPage() {
   const ctx = await requireOrgSession();
-  const [latest, evidenceFiles, documents, events, libraryAreas, requestsUsed, alerts] = await Promise.all([
+  const [latest, documents, events, libraryAreas, requestsUsed, alerts] = await Promise.all([
     getLatestAudit(ctx.org.id),
-    getEvidenceFiles(ctx.org.id),
     getIssuedDocuments(ctx.org.id),
     getCalendarEvents(ctx.org.id),
     getLibraryAreas(),
@@ -46,13 +47,14 @@ export default async function DashboardOverviewPage() {
   ]);
 
   const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
-  const uploadGoal = 10;
-  const currentEvidenceFiles = evidenceFiles.filter((f) => f.lifecycle_state !== 'superseded');
-  const uploadCount = currentEvidenceFiles.length;
-  const filledBars = Math.min(uploadCount, uploadGoal);
-  const uploadPct = Math.round((filledBars / uploadGoal) * 100);
   const unreadAlerts = alerts.filter((a) => !a.isRead);
   const auditCompleted = latest ? ['delivered', 'closed'].includes(latest.audit.status) : false;
+  // Real engine-computed coverage (only needed pre-delivery, for the strip).
+  const coverage = !auditCompleted ? await getVaultCoverage(ctx.org.id) : null;
+  const coveragePct =
+    coverage && coverage.libraryTotal > 0
+      ? Math.round((coverage.matched / coverage.libraryTotal) * 100)
+      : 0;
 
   const onboardingSteps = [
     {
@@ -98,25 +100,27 @@ export default async function DashboardOverviewPage() {
         </Link>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Evidence upload progress</span>
-          <span>
-            {uploadCount}/{uploadGoal} files
-          </span>
-        </div>
-        <div className="grid grid-cols-10 gap-1">
-          {Array.from({ length: uploadGoal }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-2.5 rounded-full ${
-                i < filledBars ? 'bg-[hsl(220,50%,15%)]' : 'bg-border'
-              }`}
+      {coverage ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Library coverage — matched against the {coverage.libraryTotal}-document compliance library</span>
+            <span>
+              {coverage.matched}/{coverage.libraryTotal} documents · {coverage.areasCovered}/
+              {coverage.areasTotal} areas
+            </span>
+          </div>
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-border">
+            <div
+              className="h-full rounded-full bg-[hsl(220,50%,15%)] transition-all"
+              style={{ width: `${Math.max(coveragePct, coverage.matched > 0 ? 2 : 0)}%` }}
             />
-          ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {coverage.legalMatched}/{coverage.legalTotal} legally-required documents matched. You
+            don&apos;t need everything before the audit — gaps become your action plan.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">{uploadPct}% complete</p>
-      </div>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-3">
         {onboardingSteps.map((step) => (
@@ -165,15 +169,16 @@ export default async function DashboardOverviewPage() {
   const score = audit.score ?? 0;
   const scoreVisible = audit.status === 'delivered' || audit.status === 'closed';
 
-  const [trend, benchmark, domainScores, scoreChange, completeness] = scoreVisible
+  const [trend, benchmark, domainScores, scoreChange, completeness, scoreBreakdown] = scoreVisible
     ? await Promise.all([
         getScoreTrend(ctx.org.id),
         getBenchmark(score),
         getSafDomainScores(audit.id),
         getLatestScoreChange(ctx.org.id),
         getAuditCompleteness(audit.id),
+        getScoreBreakdown(audit.id),
       ])
-    : [[], null, [], null, null];
+    : [[], null, [], null, null, null];
 
   // The delivered score is the fixed deliverable; "current readiness" is the
   // live figure. They start equal at delivery and only diverge as documents
@@ -308,6 +313,8 @@ export default async function DashboardOverviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {scoreVisible && scoreBreakdown ? <ScoreBreakdownPanel breakdown={scoreBreakdown} /> : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         <Card className="xl:col-span-3">

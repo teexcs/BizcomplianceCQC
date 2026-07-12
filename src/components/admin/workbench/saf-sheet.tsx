@@ -6,7 +6,7 @@ import { Star, Zap, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { setSafAnswer } from '@/lib/actions/admin';
-import { SAF_DOMAIN_LABELS } from '@/lib/audit/scoring';
+import { SAF_DOMAIN_LABELS, SAF_SHARE, safDomainScores } from '@/lib/audit/scoring';
 import type { SafQuestion, SafResponse, SafAnswer, SafDomain } from '@/types/database';
 
 const ANSWER_OPTIONS: { value: SafAnswer; label: string; active: string }[] = [
@@ -43,6 +43,7 @@ export function SafSheet({ questions, responses }: Props) {
   );
 
   const answered = responses.filter((r) => r.answer !== 'unset').length;
+  const domainSummary = safDomainScores(responses, questions);
 
   function answer(resp: SafResponse, value: SafAnswer) {
     setPending(resp.id);
@@ -59,6 +60,33 @@ export function SafSheet({ questions, responses }: Props) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">
+            SAF interview — {Math.round(SAF_SHARE * 100)}% of the readiness score
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Priority questions ×3 · two or more priority fails caps the score at 75
+          </p>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {domainSummary.map((d) => (
+            <div key={d.domain} className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-xs font-medium">{d.label}</p>
+              <p className="mt-0.5 font-display text-lg leading-none tabular-nums">
+                {d.score != null ? `${d.score.toFixed(1)}/10` : '—'}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {d.answered}/{d.total} answered
+                {d.priorityFails > 0 ? (
+                  <span className="font-semibold text-red-400"> · {d.priorityFails} ★ fail{d.priorityFails === 1 ? '' : 's'}</span>
+                ) : null}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {answered} of {questions.length} answered · ★ marks rapid-triage priority questions.

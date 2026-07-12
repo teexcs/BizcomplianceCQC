@@ -38,6 +38,8 @@ export interface Entitlements {
   // --- Higher tiers ---
   evidenceReviewFeedback: boolean; // auditor annotates uploaded evidence
   safPrep: boolean; // mock SAF interview preparation sheet
+  /** Library documents issued with [PLACEHOLDER]s auto-filled from the org record. */
+  personalisedDocuments: boolean;
   reAudit: ReAuditCadence; // automated re-audit cadence
   complianceCall: 'none' | 'quarterly';
   siteVisitPerQuarter: number;
@@ -62,6 +64,7 @@ const BASE: Omit<Entitlements, 'tier' | 'label' | 'rank'> = {
   docRequestsPerMonth: 0,
   evidenceReviewFeedback: false,
   safPrep: false,
+  personalisedDocuments: false,
   reAudit: 'none',
   complianceCall: 'none',
   siteVisitPerQuarter: 0,
@@ -104,6 +107,7 @@ export const ENTITLEMENTS: Record<PlanTier, Entitlements> = {
     docRequestsPerMonth: 6,
     evidenceReviewFeedback: true,
     safPrep: true,
+    personalisedDocuments: true,
     reAudit: 'quarterly',
     complianceCall: 'quarterly',
     siteVisitPerQuarter: 1,
@@ -120,6 +124,7 @@ export const ENTITLEMENTS: Record<PlanTier, Entitlements> = {
     docRequestsPerMonth: 999, // effectively unlimited
     evidenceReviewFeedback: true,
     safPrep: true,
+    personalisedDocuments: true,
     reAudit: 'quarterly',
     complianceCall: 'quarterly',
     siteVisitPerQuarter: 2,
@@ -205,6 +210,10 @@ export const FEATURE_MATRIX: FeatureGroup[] = [
       },
       { label: 'Auditor evidence-review feedback', value: (e) => e.evidenceReviewFeedback },
       { label: 'Mock SAF interview prep sheet', value: (e) => e.safPrep },
+      {
+        label: 'Issued documents personalised to your service',
+        value: (e) => (e.personalisedDocuments ? 'Personalised' : 'Template'),
+      },
       {
         label: 'Automated re-audit',
         value: (e) => (e.reAudit === 'quarterly' ? 'Quarterly' : false),

@@ -1,16 +1,25 @@
 import 'server-only';
 import { createClient } from '@/lib/supabase/server';
+import {
+  computeScoreBreakdown,
+  safDomainScores,
+  type SafDomainScore,
+  type ScoreBreakdown,
+} from '@/lib/audit/scoring';
 import type {
   Alert,
   Audit,
   AuditArea,
   AuditFinding,
+  AuditItem,
   CalendarEvent,
   ClientDocument,
   ComplianceRequest,
   EvidenceFile,
   LibraryArea,
   Report,
+  SafQuestion,
+  SafResponse,
   SocialProfile,
   Task,
 } from '@/types/database';
@@ -341,20 +350,7 @@ export async function getAuditCompleteness(auditId: string): Promise<AuditComple
   return { decided: d, total: t, pct: t > 0 ? Math.round((d / t) * 100) : 0 };
 }
 
-export interface DomainScore {
-  domain: string;
-  label: string;
-  /** 0–10 with one decimal, from answered SAF questions; null when unanswered. */
-  score: number | null;
-}
-
-const DOMAIN_LABELS: Record<string, string> = {
-  safe: 'Safe',
-  effective: 'Effective',
-  caring: 'Caring',
-  responsive: 'Responsive',
-  well_led: 'Well-led',
-};
+export type DomainScore = SafDomainScore;
 
 /** Five key questions scored from the audit's SAF interview (client-visible via RLS). */
 export async function getSafDomainScores(auditId: string): Promise<DomainScore[]> {
@@ -363,29 +359,27 @@ export async function getSafDomainScores(auditId: string): Promise<DomainScore[]
     supabase.from('saf_responses').select('question_id, answer').eq('audit_id', auditId),
     supabase.from('saf_questions').select('id, domain, priority'),
   ]);
-  const qById = new Map(
-    ((questions as { id: number; domain: string; priority: boolean }[]) ?? []).map((q) => [q.id, q]),
+  return safDomainScores(
+    (responses as Pick<SafResponse, 'question_id' | 'answer'>[]) ?? [],
+    (questions as Pick<SafQuestion, 'id' | 'domain' | 'priority'>[]) ?? [],
   );
+}
 
-  const agg = new Map<string, { weight: number; achieved: number }>();
-  for (const r of (responses as { question_id: number; answer: string }[]) ?? []) {
-    if (r.answer === 'unset' || r.answer === 'na') continue;
-    const q = qById.get(r.question_id);
-    if (!q) continue;
-    const w = q.priority ? 2 : 1;
-    const value = r.answer === 'yes' ? 1 : r.answer === 'partial' ? 0.5 : 0;
-    const cur = agg.get(q.domain) ?? { weight: 0, achieved: 0 };
-    cur.weight += w;
-    cur.achieved += w * value;
-    agg.set(q.domain, cur);
-  }
-
-  return Object.entries(DOMAIN_LABELS).map(([domain, label]) => {
-    const a = agg.get(domain);
-    return {
-      domain,
-      label,
-      score: a && a.weight > 0 ? Math.round((a.achieved / a.weight) * 100) / 10 : null,
-    };
-  });
+/**
+ * The full "how your score was calculated" breakdown for the client dashboard
+ * — both halves, the harsh weighting, and any cap that limited the number.
+ */
+export async function getScoreBreakdown(auditId: string): Promise<ScoreBreakdown | null> {
+  const supabase = await createClient();
+  const [{ data: items }, { data: responses }, { data: questions }] = await Promise.all([
+    supabase.from('audit_items').select('requirement, status').eq('audit_id', auditId),
+    supabase.from('saf_responses').select('question_id, answer').eq('audit_id', auditId),
+    supabase.from('saf_questions').select('id, priority'),
+  ]);
+  if (!items || items.length === 0) return null;
+  return computeScoreBreakdown(
+    items as Pick<AuditItem, 'requirement' | 'status'>[],
+    (responses as Pick<SafResponse, 'question_id' | 'answer'>[]) ?? [],
+    (questions as Pick<SafQuestion, 'id' | 'priority'>[]) ?? [],
+  );
 }

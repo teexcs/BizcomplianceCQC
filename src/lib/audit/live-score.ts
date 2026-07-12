@@ -1,7 +1,7 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 import { analyzeEvidenceByRef } from '@/lib/engine/reader/adapter';
-import { computeReadinessScore, REQUIREMENT_WEIGHT } from '@/lib/audit/scoring';
+import { computeReadinessScore, DOC_SHARE, REQUIREMENT_WEIGHT } from '@/lib/audit/scoring';
 import {
   diffReasons,
   liveItemStatus,
@@ -139,7 +139,7 @@ export async function computeLiveScore(
   const score = computeReadinessScore(effectiveItems, responses, questions);
   const safAnswered = responses.some((r) => r.answer !== 'unset' && r.answer !== 'na');
   const docAnswered = docWeightSum > 0;
-  const docShare = docAnswered && safAnswered ? 0.6 : docAnswered ? 1 : 0;
+  const docShare = docAnswered && safAnswered ? DOC_SHARE : docAnswered ? 1 : 0;
 
   return {
     auditId: audit.id,
