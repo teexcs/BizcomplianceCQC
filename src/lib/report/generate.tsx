@@ -177,7 +177,7 @@ function ReportDoc({ data }: { data: ReportData }) {
           </View>
         </View>
 
-        {breakdown?.capReason ? (
+        {breakdown?.legalWarning ? (
           <View
             style={{
               borderWidth: 1,
@@ -188,11 +188,10 @@ function ReportDoc({ data }: { data: ReportData }) {
             }}
           >
             <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5, color: COLORS.red, marginBottom: 2 }}>
-              Score capped at {breakdown.capValue}
+              Legally-required gaps
             </Text>
             <Text style={{ fontSize: 9, color: '#333a47', lineHeight: 1.5 }}>
-              {breakdown.capReason} This audit is marked strictly: no other strength offsets a
-              gap an inspector would treat as fundamental.
+              {breakdown.legalWarning}
             </Text>
           </View>
         ) : null}

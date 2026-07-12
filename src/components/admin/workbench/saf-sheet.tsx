@@ -66,24 +66,39 @@ export function SafSheet({ questions, responses }: Props) {
             SAF interview — {Math.round(SAF_SHARE * 100)}% of the readiness score
           </p>
           <p className="text-xs text-muted-foreground">
-            Priority questions ×3 · two or more priority fails caps the score at 75
+            {answered}/{questions.length} completed · priority questions weigh ×3
           </p>
         </div>
+        <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-border">
+          <div
+            className="h-full rounded-full bg-[hsl(220,50%,45%)] transition-all"
+            style={{ width: `${questions.length ? Math.round((answered / questions.length) * 100) : 0}%` }}
+          />
+        </div>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {domainSummary.map((d) => (
-            <div key={d.domain} className="rounded-lg bg-muted/30 px-3 py-2">
-              <p className="text-xs font-medium">{d.label}</p>
-              <p className="mt-0.5 font-display text-lg leading-none tabular-nums">
-                {d.score != null ? `${d.score.toFixed(1)}/10` : '—'}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {d.answered}/{d.total} answered
-                {d.priorityFails > 0 ? (
-                  <span className="font-semibold text-red-400"> · {d.priorityFails} ★ fail{d.priorityFails === 1 ? '' : 's'}</span>
-                ) : null}
-              </p>
-            </div>
-          ))}
+          {domainSummary.map((d) => {
+            const pct = d.total ? Math.round((d.answered / d.total) * 100) : 0;
+            return (
+              <div key={d.domain} className="rounded-lg bg-muted/30 px-3 py-2">
+                <div className="flex items-baseline justify-between gap-1">
+                  <p className="text-xs font-medium">{d.label}</p>
+                  <p className="text-[11px] tabular-nums text-muted-foreground">{pct}%</p>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border">
+                  <div
+                    className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-[hsl(220,50%,45%)]'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {d.answered}/{d.total} answered{d.score != null ? ` · ${d.score.toFixed(1)}/10` : ''}
+                  {d.priorityFails > 0 ? (
+                    <span className="font-semibold text-red-400"> · {d.priorityFails} ★</span>
+                  ) : null}
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 

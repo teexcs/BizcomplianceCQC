@@ -16,19 +16,17 @@ import type {
  * strict: a provider must not look nearly-ready while carrying gaps a CQC
  * inspector would seize on. The rules, all enforced in this file:
  *
- *   1. Documents and the SAF interview each carry 50% of the score. The SAF
- *      is CQC's actual assessment framework — how you answer the inspector
- *      matters as much as what's in the filing cabinet.
+ *   1. Documents carry 60% of the score, the SAF interview 40% — the evidence
+ *      base leads, the inspection interview refines.
  *   2. An out-of-date document earns 25% credit (not 40%) — an expired policy
  *      is barely better than none at inspection.
  *   3. A "partial" SAF answer earns 40% credit (not 50%).
  *   4. Priority SAF questions weigh ×3 — they're the rapid-triage questions
  *      an inspection turns on.
- *   5. LEGAL-BREACH CAP: any legally-required document missing or expired
- *      caps the overall score at 65, minus 5 per additional breach (floor 30).
- *      No amount of good practice elsewhere makes a legal gap look safe.
- *   6. SAF PRIORITY-FAIL CAP: two or more priority questions answered "no"
- *      caps the score at 75, minus 5 per additional fail (floor 40).
+ *   5. The score itself stays PROPORTIONAL to the evidence (145/146 present
+ *      really is ~94). Legal breaches are surfaced loudly instead of
+ *      distorting the number: each one RAGs its area RED (suggestAreaRag)
+ *      and is called out as a warning on the dashboard and in the PDF.
  */
 export const REQUIREMENT_WEIGHT: Record<RequirementLevel, number> = {
   legal: 3,
@@ -43,20 +41,9 @@ export const ITEM_SCORE: Record<Exclude<ItemStatus, 'na' | 'unset'>, number> = {
   missing: 0,
 };
 
-/** Documents / SAF halves of the blended score (rule 1). */
-export const DOC_SHARE = 0.5;
-export const SAF_SHARE = 0.5;
-
-/** Rule 5 — legal-breach cap. */
-export const LEGAL_BREACH_CAP = 65;
-export const LEGAL_BREACH_STEP = 5;
-export const LEGAL_BREACH_FLOOR = 30;
-
-/** Rule 6 — SAF priority-fail cap (applies from the 2nd fail). */
-export const PRIORITY_FAIL_CAP = 75;
-export const PRIORITY_FAIL_STEP = 5;
-export const PRIORITY_FAIL_FLOOR = 40;
-export const PRIORITY_FAIL_THRESHOLD = 2;
+/** Documents / SAF halves of the blended score. */
+export const DOC_SHARE = 0.6;
+export const SAF_SHARE = 0.4;
 
 /** Rule 4 — priority SAF questions weigh ×3. */
 export const SAF_PRIORITY_WEIGHT = 3;
@@ -157,14 +144,10 @@ export function scoreSaf(
 }
 
 export interface ScoreBreakdown {
-  /** Final 0–100 score after caps. */
+  /** Final 0–100 score — always proportional to the evidence. */
   score: number;
-  /** The blended score before any cap was applied. */
-  uncapped: number;
-  /** Which cap (if any) limited the score, with a plain-English reason. */
-  capApplied: 'legal' | 'saf_priority' | null;
-  capValue: number | null;
-  capReason: string | null;
+  /** Loud warning when legal gaps exist (shown on dashboard + PDF, score untouched). */
+  legalWarning: string | null;
   doc: DocScoreBreakdown;
   saf: SafScoreBreakdown;
   docShare: number;
@@ -172,11 +155,10 @@ export interface ScoreBreakdown {
 }
 
 /**
- * Overall readiness score, 0–100 — harsh by design (see the scheme at the top
- * of this file). Documents and the SAF interview each carry 50%; if one half
- * has no answers yet the other carries the full weight so in-progress audits
- * still show movement. Legal breaches and repeated priority-question failures
- * cap the final number regardless of everything else.
+ * Overall readiness score, 0–100 — harsh but proportional (see the scheme at
+ * the top of this file). Documents carry 60%, the SAF interview 40%; if
+ * one half has no answers yet the other carries the full weight so
+ * in-progress audits still show movement.
  */
 export function computeScoreBreakdown(
   items: Pick<AuditItem, 'requirement' | 'status'>[],
@@ -204,44 +186,15 @@ export function computeScoreBreakdown(
     combined = 0;
   }
 
-  const uncapped = Math.round(combined * 100);
-  let score = uncapped;
-  let capApplied: ScoreBreakdown['capApplied'] = null;
-  let capValue: number | null = null;
-  let capReason: string | null = null;
+  const score = Math.round(combined * 100);
 
-  // Rule 5 — legal-breach cap.
-  if (doc.legalMissing > 0) {
-    const cap = Math.max(
-      LEGAL_BREACH_FLOOR,
-      LEGAL_BREACH_CAP - (doc.legalMissing - 1) * LEGAL_BREACH_STEP,
-    );
-    if (cap < score) {
-      score = cap;
-      capApplied = 'legal';
-      capValue = cap;
-      capReason =
-        doc.legalMissing === 1
-          ? 'A legally-required document is missing or out of date, which caps the score — no other strength offsets a legal gap.'
-          : `${doc.legalMissing} legally-required documents are missing or out of date, which caps the score — no other strength offsets legal gaps.`;
-    }
-  }
+  // Legal gaps never distort the number — they are surfaced loudly instead.
+  const legalWarning =
+    doc.legalMissing > 0
+      ? `${doc.legalMissing} legally-required document${doc.legalMissing === 1 ? ' is' : 's are'} missing or out of date — each marks its compliance area RED and would be an immediate focus at inspection.`
+      : null;
 
-  // Rule 6 — SAF priority-fail cap (only if it bites harder than the legal cap).
-  if (saf.priorityFails >= PRIORITY_FAIL_THRESHOLD) {
-    const cap = Math.max(
-      PRIORITY_FAIL_FLOOR,
-      PRIORITY_FAIL_CAP - (saf.priorityFails - PRIORITY_FAIL_THRESHOLD) * PRIORITY_FAIL_STEP,
-    );
-    if (cap < score) {
-      score = cap;
-      capApplied = 'saf_priority';
-      capValue = cap;
-      capReason = `${saf.priorityFails} priority SAF questions were answered "no" — the questions an inspection turns on — which caps the score.`;
-    }
-  }
-
-  return { score, uncapped, capApplied, capValue, capReason, doc, saf, docShare, safShare };
+  return { score, legalWarning, doc, saf, docShare, safShare };
 }
 
 /** Overall readiness score, 0–100 (the headline number from the breakdown). */

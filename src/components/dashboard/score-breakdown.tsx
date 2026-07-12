@@ -21,16 +21,10 @@ export function ScoreBreakdownPanel({ breakdown }: { breakdown: ScoreBreakdown }
           </p>
         </div>
 
-        {breakdown.capReason ? (
+        {breakdown.legalWarning ? (
           <div className="flex items-start gap-2.5 rounded-lg border border-red-500/25 bg-red-500/5 px-4 py-3">
             <AlertTriangle size={15} className="mt-0.5 shrink-0 text-[hsl(4,65%,42%)]" aria-hidden="true" />
-            <p className="text-sm leading-relaxed text-[hsl(4,65%,42%)]">
-              <span className="font-semibold">Score capped at {breakdown.capValue}.</span>{' '}
-              {breakdown.capReason}
-              {breakdown.uncapped > (breakdown.capValue ?? 0)
-                ? ` Without the cap it would have been ${breakdown.uncapped}.`
-                : ''}
-            </p>
+            <p className="text-sm leading-relaxed text-[hsl(4,65%,42%)]">{breakdown.legalWarning}</p>
           </div>
         ) : null}
 
@@ -100,10 +94,9 @@ export function ScoreBreakdownPanel({ breakdown }: { breakdown: ScoreBreakdown }
               weighted ×3.
             </li>
             <li>
-              Any legally-required document missing or expired caps the whole score at 65 (lower
-              with each additional gap) — nothing offsets a legal breach.
+              A missing or expired legally-required document marks its whole compliance area RED
+              and is flagged at the top of your report.
             </li>
-            <li>Two or more failed priority questions cap the score at 75.</li>
           </ul>
         </div>
       </CardContent>
