@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/select';
 import { Checklist } from './checklist';
 import { SafSheet } from './saf-sheet';
 import { Findings } from './findings';
+import { Sampling } from './sampling';
 import { ReportTab } from './report-tab';
 import { setAuditStatus } from '@/lib/actions/admin';
 import { AUDIT_STATUS_LABELS } from '@/lib/audit/scoring';
@@ -17,6 +18,8 @@ import type {
   AuditFinding,
   AuditItem,
   AuditStatus,
+  EvidenceFile,
+  FileSample,
   LibraryArea,
   Report,
   SafQuestion,
@@ -31,6 +34,8 @@ interface Props {
   safQuestions: SafQuestion[];
   safResponses: SafResponse[];
   findings: AuditFinding[];
+  evidence: EvidenceFile[];
+  fileSamples: FileSample[];
   reports: Report[];
   organisationName: string;
 }
@@ -131,6 +136,9 @@ export function Workbench(props: Props) {
           <TabsTrigger value="findings" active={tab === 'findings'} onClick={() => setTab('findings')}>
             Findings ({props.findings.filter((f) => f.status === 'open').length})
           </TabsTrigger>
+          <TabsTrigger value="sampling" active={tab === 'sampling'} onClick={() => setTab('sampling')}>
+            File sampling ({props.fileSamples.length})
+          </TabsTrigger>
           <TabsTrigger value="report" active={tab === 'report'} onClick={() => setTab('report')}>
             Report ({props.reports.length})
           </TabsTrigger>
@@ -151,6 +159,13 @@ export function Workbench(props: Props) {
             findings={props.findings}
             libraryAreas={props.libraryAreas}
             auditId={props.audit.id}
+          />
+        </TabsContent>
+        <TabsContent value="sampling" activeValue={tab} className="mt-5">
+          <Sampling
+            auditId={props.audit.id}
+            evidence={props.evidence}
+            samples={props.fileSamples}
           />
         </TabsContent>
         <TabsContent value="report" activeValue={tab} className="mt-5">

@@ -250,6 +250,28 @@ export interface Report {
   created_at: string;
 }
 
+export type SampleVerdict =
+  | 'unset'
+  | 'compliant'
+  | 'partial'
+  | 'not_compliant'
+  | 'not_applicable';
+
+/** Auditor file-sampling review of one client record examined in depth. */
+export interface FileSample {
+  id: string;
+  audit_id: string;
+  org_id: string;
+  evidence_id: string;
+  area_code: string | null;
+  sample_type: string;
+  verdict: SampleVerdict;
+  findings: string | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ComplianceRequest {
   id: string;
   org_id: string;

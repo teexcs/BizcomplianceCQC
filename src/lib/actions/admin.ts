@@ -43,6 +43,15 @@ function fail(error: string): ActionResult {
   return { ok: false, error };
 }
 
+/** Shape of a file_samples row joined to its evidence file name (for the PDF). */
+interface SampleJoin {
+  sample_type: string;
+  verdict: 'unset' | 'compliant' | 'partial' | 'not_compliant' | 'not_applicable';
+  area_code: string | null;
+  findings: string | null;
+  evidence: { file_name: string } | null;
+}
+
 // ---------------------------------------------------------------------------
 // Audit workbench: checklist items
 // ---------------------------------------------------------------------------
@@ -208,6 +217,77 @@ export async function deleteFinding(findingId: string, auditId: string): Promise
   const supabase = await createClient();
   const { error } = await supabase.from('audit_findings').delete().eq('id', findingId);
   if (error) return fail('Could not delete the finding.');
+  revalidatePath(`/admin/audits/${auditId}`);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Audit workbench: file sampling (Step 5 — read individual records in depth)
+// ---------------------------------------------------------------------------
+const sampleSchema = z.object({
+  auditId: z.string().uuid(),
+  evidenceId: z.string().uuid(),
+  sampleType: z.string().max(40).optional(),
+  verdict: z.enum(['unset', 'compliant', 'partial', 'not_compliant', 'not_applicable']),
+  findings: z.string().max(4000).optional(),
+});
+
+/**
+ * Record (or update) the auditor's sampling review of one client file. Upserts
+ * on (audit, evidence) so re-reviewing a file overwrites the prior verdict
+ * rather than duplicating. Resolves org + area from the evidence row so the UI
+ * only sends the verdict and notes.
+ */
+export async function saveFileSample(
+  input: z.infer<typeof sampleSchema>,
+): Promise<ActionResult> {
+  const ctx = await requireAdminSession();
+  const parsed = sampleSchema.safeParse(input);
+  if (!parsed.success) return fail('Invalid sample.');
+
+  const supabase = await createClient();
+  const { data: evidence } = await supabase
+    .from('evidence_files')
+    .select('id, org_id, area_code')
+    .eq('id', parsed.data.evidenceId)
+    .single<{ id: string; org_id: string; area_code: string | null }>();
+  if (!evidence) return fail('Evidence file not found.');
+
+  // Verify the evidence belongs to the audit's org (defence in depth over RLS).
+  const { data: audit } = await supabase
+    .from('audits')
+    .select('org_id')
+    .eq('id', parsed.data.auditId)
+    .single<{ org_id: string }>();
+  if (!audit) return fail('Audit not found.');
+  if (audit.org_id !== evidence.org_id) return fail('That file is not part of this audit.');
+
+  const row = {
+    audit_id: parsed.data.auditId,
+    org_id: evidence.org_id,
+    evidence_id: evidence.id,
+    area_code: evidence.area_code,
+    sample_type: parsed.data.sampleType || 'other',
+    verdict: parsed.data.verdict,
+    findings: parsed.data.findings?.trim() ? parsed.data.findings.trim() : null,
+    reviewed_by: ctx.userId,
+  };
+
+  const { error } = await supabase
+    .from('file_samples')
+    .upsert(row, { onConflict: 'audit_id,evidence_id' });
+  if (error) return fail('Could not save the sample review.');
+
+  revalidatePath(`/admin/audits/${parsed.data.auditId}`);
+  return { ok: true };
+}
+
+/** Remove a file from the sample (auditor decides not to sample it after all). */
+export async function deleteFileSample(sampleId: string, auditId: string): Promise<ActionResult> {
+  await requireAdminSession();
+  const supabase = await createClient();
+  const { error } = await supabase.from('file_samples').delete().eq('id', sampleId);
+  if (error) return fail('Could not remove the sample.');
   revalidatePath(`/admin/audits/${auditId}`);
   return { ok: true };
 }
@@ -584,6 +664,20 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     console.error('[report] verification failed, continuing without it', e);
   }
 
+  // File-sampling reviews, joined to their file names for the report's
+  // file-sampling section (only reviewed samples reach the PDF).
+  const { data: samples } = await admin
+    .from('file_samples')
+    .select('sample_type, verdict, area_code, findings, evidence:evidence_files(file_name)')
+    .eq('audit_id', auditId);
+  const fileSamples = ((samples as unknown as SampleJoin[]) ?? []).map((s) => ({
+    fileName: s.evidence?.file_name ?? 'Sampled file',
+    areaCode: s.area_code,
+    sampleType: s.sample_type,
+    verdict: s.verdict,
+    findings: s.findings,
+  }));
+
   const pdf = await renderAuditReportPdf({
     audit,
     organisation: org,
@@ -594,6 +688,7 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     domainScores,
     breakdown,
     verification,
+    fileSamples,
   });
 
   const { data: prev } = await admin

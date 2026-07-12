@@ -58,6 +58,8 @@ export default async function AuditWorkbenchPage({
         safQuestions={bundle.safQuestions}
         safResponses={bundle.safResponses}
         findings={bundle.findings}
+        evidence={bundle.evidence}
+        fileSamples={bundle.fileSamples}
         reports={bundle.reports}
       />
     </div>

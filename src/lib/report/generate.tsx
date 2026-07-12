@@ -42,6 +42,22 @@ const RAG_COLOR: Record<RagStatus, string> = {
   unset: COLORS.muted,
 };
 
+const SAMPLE_VERDICT_LABEL: Record<ReportFileSample['verdict'], string> = {
+  unset: '—',
+  compliant: 'Compliant',
+  partial: 'Partial',
+  not_compliant: 'Not compliant',
+  not_applicable: 'N/A',
+};
+
+const SAMPLE_COLOR: Record<ReportFileSample['verdict'], string> = {
+  unset: COLORS.muted,
+  compliant: COLORS.green,
+  partial: COLORS.amber,
+  not_compliant: COLORS.red,
+  not_applicable: COLORS.muted,
+};
+
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 10, color: COLORS.ink, fontFamily: 'Helvetica' },
   headerBar: {
@@ -120,11 +136,22 @@ export interface ReportData {
   breakdown?: ScoreBreakdown | null;
   /** Evidence-verification pass — powers Evidence Reviewed + policy-only gaps. */
   verification?: VerificationResult | null;
+  /** Files sampled in depth by the auditor, with verdict + findings. */
+  fileSamples?: ReportFileSample[];
+}
+
+export interface ReportFileSample {
+  fileName: string;
+  areaCode: string | null;
+  sampleType: string;
+  verdict: 'unset' | 'compliant' | 'partial' | 'not_compliant' | 'not_applicable';
+  findings: string | null;
 }
 
 function ReportDoc({ data }: { data: ReportData }) {
-  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification } =
+  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples } =
     data;
+  const samples = (fileSamples ?? []).filter((s) => s.verdict !== 'unset');
   const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
   const counts = {
     green: areas.filter((a) => a.rag === 'green').length,
@@ -351,6 +378,36 @@ function ReportDoc({ data }: { data: ReportData }) {
                   </Text>
                 </View>
               ))}
+          </View>
+        ) : null}
+
+        {samples.length > 0 ? (
+          <View>
+            <Text style={styles.h2}>File sampling</Text>
+            <Text style={styles.para}>
+              {samples.length} individual record{samples.length === 1 ? ' was' : 's were'} examined in
+              depth for completeness, consistency and regulatory alignment. Verdicts and findings:
+            </Text>
+            {samples.map((s, i) => (
+              <View key={i} style={{ marginBottom: 8 }} wrap={false}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5, flex: 1, paddingRight: 8 }}>
+                    {s.fileName}
+                    {s.areaCode ? (
+                      <Text style={{ fontFamily: 'Helvetica', color: COLORS.muted }}>
+                        {'  '}·{'  '}Area {s.areaCode}
+                      </Text>
+                    ) : null}
+                  </Text>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: SAMPLE_COLOR[s.verdict] }}>
+                    {SAMPLE_VERDICT_LABEL[s.verdict]}
+                  </Text>
+                </View>
+                {s.findings ? (
+                  <Text style={styles.findingDetail}>{s.findings}</Text>
+                ) : null}
+              </View>
+            ))}
           </View>
         ) : null}
 

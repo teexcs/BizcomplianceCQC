@@ -51,6 +51,11 @@ const data: ReportData = {
     docShare: 0.6, safShare: 0.4,
   },
   verification,
+  fileSamples: [
+    { fileName: 'John S — Care Plan.pdf', areaCode: '07', sampleType: 'care_plan', verdict: 'compliant', findings: 'Dated, signed, reviewed within 12 months; consent recorded.' },
+    { fileName: 'MAR chart — March 2026.pdf', areaCode: '06', sampleType: 'mar_chart', verdict: 'partial', findings: 'Two gaps in signatures on 14th and 15th; no recorded reason.' },
+    { fileName: 'Staff file — A. Nurse.pdf', areaCode: '12', sampleType: 'staff_file', verdict: 'not_compliant', findings: 'DBS certificate not on file; two references missing.' },
+  ],
 };
 
 const pdf = await renderAuditReportPdf(data);

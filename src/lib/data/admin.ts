@@ -10,6 +10,7 @@ import type {
   ContactMessage,
   CalendarEvent,
   EvidenceFile,
+  FileSample,
   LibraryArea,
   LibraryAsset,
   Organisation,
@@ -50,6 +51,7 @@ export interface AuditWorkbenchBundle {
   safResponses: SafResponse[];
   findings: AuditFinding[];
   evidence: EvidenceFile[];
+  fileSamples: FileSample[];
   reports: Report[];
 }
 
@@ -62,26 +64,37 @@ export async function getAuditWorkbench(auditId: string): Promise<AuditWorkbench
     .maybeSingle<Audit>();
   if (!audit) return null;
 
-  const [org, items, areas, libraryAreas, safQuestions, safResponses, findings, evidence, reports] =
-    await Promise.all([
-      supabase.from('organisations').select('*').eq('id', audit.org_id).single<Organisation>(),
-      supabase.from('audit_items').select('*').eq('audit_id', auditId).order('ref'),
-      supabase.from('audit_areas').select('*').eq('audit_id', auditId),
-      supabase.from('library_areas').select('*').order('sort'),
-      supabase.from('saf_questions').select('*').order('id'),
-      supabase.from('saf_responses').select('*').eq('audit_id', auditId),
-      supabase.from('audit_findings').select('*').eq('audit_id', auditId).order('sort'),
-      supabase
-        .from('evidence_files')
-        .select('*')
-        .eq('org_id', audit.org_id)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('reports')
-        .select('*')
-        .eq('audit_id', auditId)
-        .order('version', { ascending: false }),
-    ]);
+  const [
+    org,
+    items,
+    areas,
+    libraryAreas,
+    safQuestions,
+    safResponses,
+    findings,
+    evidence,
+    fileSamples,
+    reports,
+  ] = await Promise.all([
+    supabase.from('organisations').select('*').eq('id', audit.org_id).single<Organisation>(),
+    supabase.from('audit_items').select('*').eq('audit_id', auditId).order('ref'),
+    supabase.from('audit_areas').select('*').eq('audit_id', auditId),
+    supabase.from('library_areas').select('*').order('sort'),
+    supabase.from('saf_questions').select('*').order('id'),
+    supabase.from('saf_responses').select('*').eq('audit_id', auditId),
+    supabase.from('audit_findings').select('*').eq('audit_id', auditId).order('sort'),
+    supabase
+      .from('evidence_files')
+      .select('*')
+      .eq('org_id', audit.org_id)
+      .order('created_at', { ascending: false }),
+    supabase.from('file_samples').select('*').eq('audit_id', auditId),
+    supabase
+      .from('reports')
+      .select('*')
+      .eq('audit_id', auditId)
+      .order('version', { ascending: false }),
+  ]);
 
   if (!org.data) return null;
 
@@ -95,6 +108,7 @@ export async function getAuditWorkbench(auditId: string): Promise<AuditWorkbench
     safResponses: (safResponses.data as SafResponse[]) ?? [],
     findings: (findings.data as AuditFinding[]) ?? [],
     evidence: (evidence.data as EvidenceFile[]) ?? [],
+    fileSamples: (fileSamples.data as FileSample[]) ?? [],
     reports: (reports.data as Report[]) ?? [],
   };
 }
