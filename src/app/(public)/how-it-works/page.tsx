@@ -70,6 +70,12 @@ export default function HowItWorksPage() {
           <p className="text-lg text-muted-foreground leading-relaxed mb-16 max-w-2xl">
             Our process is designed to be thorough yet straightforward. We handle the complexity so you can focus on running your business.
           </p>
+          <Link
+            href="#see-how-we-assess"
+            className="inline-flex items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            See how we assess →
+          </Link>
         </ScrollReveal>
 
         <div className="space-y-5">
@@ -87,6 +93,65 @@ export default function HowItWorksPage() {
             </ScrollReveal>
           ))}
         </div>
+
+        <ScrollReveal delay={550}>
+          <div
+            id="see-how-we-assess"
+            className="mt-16 rounded-2xl border border-border bg-muted/25 p-6 md:p-8"
+          >
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-[hsl(220,45%,45%)] mb-4">
+              See how we assess
+            </p>
+            <h2 className="font-display text-2xl md:text-3xl tracking-tight mb-4">
+              How BizCompliance Assesses Your Service
+            </h2>
+            <p className="text-muted-foreground leading-relaxed max-w-3xl mb-6">
+              More than a document checklist. We review whether your compliance systems are
+              evidenced, current and capable of standing up to scrutiny.
+            </p>
+
+            <div className="space-y-5 max-w-3xl">
+              <div>
+                <h3 className="font-display text-lg tracking-tight">1. Evidence review</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  We review the documents and operational records uploaded to your secure workspace.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-display text-lg tracking-tight">2. Regulatory mapping</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Findings are mapped against relevant CQC expectations and regulatory requirements.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-display text-lg tracking-tight">3. Risk-based assessment</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Higher-risk gaps are prioritised based on their potential impact on safety,
+                  governance and inspection readiness.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-display text-lg tracking-tight">4. Readiness rating</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  Each area receives a red, amber or green finding and contributes to your overall
+                  readiness position.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-display text-lg tracking-tight">5. Action plan</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  You receive clear corrective actions, evidence requirements and priority timescales.
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-sm leading-relaxed text-muted-foreground max-w-3xl">
+              Important: BizCompliance is an independent compliance service. Our assessment does
+              not constitute a CQC inspection, official rating or guarantee of an inspection
+              outcome.
+            </p>
+          </div>
+        </ScrollReveal>
 
         {/* CTA */}
         <ScrollReveal delay={200}>
