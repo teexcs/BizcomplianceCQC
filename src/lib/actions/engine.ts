@@ -8,7 +8,8 @@ import {
   type AutopilotStats,
   type ApplyStats,
 } from '@/lib/engine/autopilot';
-import { runReaderSuggest, buildAuditAnalysis } from '@/lib/engine/reader/adapter';
+import { runReaderSuggest, buildAuditAnalysis, verifyOrgEvidence } from '@/lib/engine/reader/adapter';
+import type { VerificationResult } from '@/lib/audit/verification';
 
 export interface EngineActionResult {
   ok: boolean;
@@ -44,6 +45,31 @@ export async function getAuditAnalysis(
   } catch (e) {
     console.error('[engine] analysis failed', e);
     return { ok: false, error: 'Could not build the analysis — try again.' };
+  }
+}
+
+/**
+ * Structured evidence verification for one audit's org — powers the admin
+ * verification panel. Read-only. Resolves the org from the audit id so the UI
+ * only needs the audit it's already viewing.
+ */
+export async function getEvidenceVerification(
+  auditId: string,
+): Promise<{ ok: boolean; verification?: VerificationResult; error?: string }> {
+  await requireAdminSession();
+  const supabase = await createClient();
+  const { data: audit, error } = await supabase
+    .from('audits')
+    .select('org_id')
+    .eq('id', auditId)
+    .single<{ org_id: string }>();
+  if (error || !audit) return { ok: false, error: 'Audit not found.' };
+  try {
+    const verification = await verifyOrgEvidence(audit.org_id);
+    return { ok: true, verification };
+  } catch (e) {
+    console.error('[engine] verification failed', e);
+    return { ok: false, error: 'Could not verify evidence — try again.' };
   }
 }
 

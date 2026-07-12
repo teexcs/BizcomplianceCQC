@@ -3,6 +3,7 @@ import { requireOrgSession } from '@/lib/data/session';
 import { getEvidenceFiles } from '@/lib/data/client';
 import { getVaultCoverage } from '@/lib/engine/reader/adapter';
 import { EvidenceUploader } from '@/components/dashboard/evidence-uploader';
+import { EvidenceRequestList } from '@/components/dashboard/evidence-request-list';
 import { formatDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -228,7 +229,9 @@ export default async function EvidencePage() {
           </div>
         ) : null}
 
-        <EvidenceUploader />
+        <EvidenceUploader existingFiles={currentFiles} />
+
+        <EvidenceRequestList />
       </div>
 
       <div className="space-y-6">

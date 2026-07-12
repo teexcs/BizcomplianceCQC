@@ -14,6 +14,7 @@ import {
   type SafDomainScore,
   type ScoreBreakdown,
 } from '@/lib/audit/scoring';
+import type { VerificationResult } from '@/lib/audit/verification';
 
 const COLORS = {
   ink: '#111722',
@@ -117,10 +118,12 @@ export interface ReportData {
   domainScores?: SafDomainScore[];
   /** Full harsh-marking breakdown — drives the cap note and halves line. */
   breakdown?: ScoreBreakdown | null;
+  /** Evidence-verification pass — powers Evidence Reviewed + policy-only gaps. */
+  verification?: VerificationResult | null;
 }
 
 function ReportDoc({ data }: { data: ReportData }) {
-  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown } =
+  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification } =
     data;
   const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
   const counts = {
@@ -129,6 +132,33 @@ function ReportDoc({ data }: { data: ReportData }) {
     red: areas.filter((a) => a.rag === 'red').length,
   };
   const openFindings = findings.filter((f) => f.status === 'open');
+
+  // Strengths — areas that are fully compliant and, where verification ran,
+  // fully backed by records. Named, so the report is balanced, not just gaps.
+  const strengths: string[] = (() => {
+    const out: string[] = [];
+    const greenAreas = [...areas]
+      .filter((a) => a.rag === 'green')
+      .sort((a, b) => a.area_code.localeCompare(b.area_code));
+    for (const a of greenAreas.slice(0, 6)) {
+      out.push(`${a.area_code} ${areaName.get(a.area_code) ?? a.area_code} — compliant, no gaps identified.`);
+    }
+    if (verification) {
+      const fully = verification.areas.filter(
+        (a) => a.items.length > 0 && a.verified === a.items.length,
+      );
+      if (fully.length > 0) {
+        out.push(
+          `${fully.length} area${fully.length === 1 ? '' : 's'} fully evidenced — every expected record was supplied and verified.`,
+        );
+      }
+    }
+    if (out.length === 0 && score >= 60) {
+      out.push('A substantial documentation base is in place to build on.');
+    }
+    return out;
+  })();
+
   const issued = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
@@ -272,6 +302,72 @@ function ReportDoc({ data }: { data: ReportData }) {
       </Page>
 
       <Page size="A4" style={styles.page}>
+        <Text style={styles.h2}>Scope of review</Text>
+        <Text style={styles.para}>
+          This is an independent documentation and inspection-readiness review of {organisation.name}
+          {' '}against the Health and Social Care Act 2008 (Regulated Activities) Regulations 2014,
+          the Fundamental Standards, and the CQC Single Assessment Framework. It covers the 18
+          compliance areas relevant to a domiciliary care service: registration, safeguarding,
+          consent and mental capacity, safe care and risk, lone working, medicines, care planning,
+          complaints, duty of candour, governance, staffing and training, safe recruitment, data
+          protection, health and safety, infection prevention, statutory notifications, business
+          continuity, and dignity and rights.
+        </Text>
+
+        <Text style={styles.h2}>Methodology</Text>
+        <Text style={styles.para}>
+          Every document supplied was read line by line against a rulebook of the regulatory
+          signals an inspector looks for. Each finding is traceable to the exact text that proves,
+          or fails to prove, the point — the review does not infer compliance that is not written
+          down. Beyond reading policies, the review verifies whether each policy is backed by the
+          supporting record that shows it is lived in practice (for example, a training matrix
+          behind a training policy, or MAR charts behind a medicines policy). Where the policy is
+          present but the corroborating record was not supplied, the item is reported as
+          &quot;policy only, not yet verified&quot; rather than as compliant.
+        </Text>
+
+        {verification ? (
+          <View>
+            <Text style={styles.h2}>Evidence reviewed &amp; verification</Text>
+            <Text style={styles.para}>
+              Of {verification.totals.items} expected evidence items across the 18 areas,{' '}
+              {verification.totals.verified} were verified by a supporting record,{' '}
+              {verification.totals.policyOnly} were policy-only (the policy exists but the proving
+              record was not supplied), and {verification.totals.absent} were not supplied.{' '}
+              {verification.totals.criticalGaps > 0
+                ? `${verification.totals.criticalGaps} essential item${verification.totals.criticalGaps === 1 ? '' : 's'} remain${verification.totals.criticalGaps === 1 ? 's' : ''} unverified and ${verification.totals.criticalGaps === 1 ? 'is' : 'are'} reflected in the ratings and action plan.`
+                : 'All essential items were verified.'}
+            </Text>
+            {verification.areas
+              .filter((a) => a.items.length > 0)
+              .map((a) => (
+                <View key={a.code} style={styles.areaRow} wrap={false}>
+                  <Text style={styles.areaName}>
+                    {a.code} {a.area}
+                  </Text>
+                  <Text style={{ fontSize: 9, color: COLORS.muted, width: 150, textAlign: 'right' }}>
+                    {a.verified}/{a.items.length} verified
+                    {a.criticalGaps > 0 ? ` · ${a.criticalGaps} essential gap${a.criticalGaps === 1 ? '' : 's'}` : ''}
+                  </Text>
+                </View>
+              ))}
+          </View>
+        ) : null}
+
+        {strengths.length > 0 ? (
+          <View>
+            <Text style={styles.h2}>Strengths</Text>
+            {strengths.map((s, i) => (
+              <Text key={i} style={styles.findingDetail}>
+                • {s}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {footer}
+      </Page>
+
+      <Page size="A4" style={styles.page}>
         <Text style={styles.h2}>Priority action plan</Text>
         <Text style={styles.para}>
           Actions are ordered by urgency. “Fix first” items relate to legally required documents or
@@ -326,10 +422,19 @@ function ReportDoc({ data }: { data: ReportData }) {
             </View>
           ))}
 
-        <Text style={[styles.para, { marginTop: 14, fontSize: 8, color: COLORS.muted }]}>
-          This report is an editable documentation and readiness toolset. The registered provider and
-          registered manager remain accountable for compliance with the law. Assessment framework:
-          HSCA 2008 (Regulated Activities) Regulations 2014 and the CQC Single Assessment Framework.
+        <Text style={styles.h2}>Basis, limitations & disclaimer</Text>
+        <Text style={[styles.para, { fontSize: 8.5, color: COLORS.muted }]}>
+          This is an independent documentation and inspection-readiness review, assessed against the
+          Health and Social Care Act 2008 (Regulated Activities) Regulations 2014, the Fundamental
+          Standards, and the CQC Single Assessment Framework. BizCompliance is not the Care Quality
+          Commission and is not affiliated with it; this review is not an inspection and does not
+          guarantee any inspection rating or outcome. Findings are based only on the documents and
+          records supplied for review — items not supplied are reported as gaps and may not reflect
+          arrangements that exist but were not provided. Verification confirms whether a supporting
+          record was supplied; it is not a legal opinion on the adequacy of each procedure. The
+          registered provider and registered manager remain fully accountable for compliance with
+          the law and for the accuracy and completeness of the evidence submitted. This report is
+          issued as an editable readiness toolset to support your own quality assurance.
         </Text>
         {footer}
       </Page>

@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 import type { AuditItem, ItemStatus } from '@/types/database';
 import type { AutopilotStats } from '@/lib/engine/autopilot';
+import { verifyEvidence, type VerifiableFile, type VerificationResult } from '@/lib/audit/verification';
 // Verbatim copy of the standalone policy-evidence-reader engine. These modules
 // are byte-identical to ~/Downloads/policy-evidence-reader and must not be
 // edited here — treat them as a vendored, tested dependency. Typed via the
@@ -415,6 +416,43 @@ export function analyzeEvidenceByRef(
 }
 
 /**
+ * EVIDENCE VERIFICATION (DB wrapper) — run the pure verification layer over the
+ * org's live vault. For every file we reuse the SAME deterministic classifier
+ * the coverage/suggest paths use to assign a CQC area, then hand the reduced
+ * file list to verifyEvidence so policy-vs-record gaps are surfaced.
+ *
+ * Area is taken from the persisted `area_code` when present (admin/auto-sort has
+ * decided it), otherwise from the reader's own classification — so verification
+ * agrees with what the rest of the pipeline believes about each file.
+ */
+export async function verifyOrgEvidence(orgId: string): Promise<VerificationResult> {
+  const admin = createAdminClient();
+  const { data: evidence } = await admin
+    .from('evidence_files')
+    .select('id, file_name, area_code, extract_status, extracted_text, scan_status, lifecycle_state')
+    .eq('org_id', orgId)
+    .eq('lifecycle_state', 'current')
+    .neq('scan_status', 'infected');
+
+  const rows =
+    (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
+
+  const files: VerifiableFile[] = rows.map((e) => {
+    const doc = toIngestedDoc(e);
+    const text = doc.readable ? doc.lines.join('\n') : '';
+    // Prefer the stored area; fall back to the reader's classification.
+    let areaCode = e.area_code ?? null;
+    if (!areaCode && doc.readable) {
+      const cls = classify(doc);
+      areaCode = cls.area ?? null;
+    }
+    return { id: e.id, fileName: e.file_name, text, areaCode };
+  });
+
+  return verifyEvidence(files);
+}
+
+/**
  * The INTERNAL analysis — the reader's full "everything, quoted" report for the
  * auditor to review before issuing anything to the client. Read-only: it reads
  * the vault's extracted text, runs the whole-set analysis, and returns the same
@@ -443,10 +481,60 @@ export async function buildAuditAnalysis(
       .neq('scan_status', 'infected'),
   ]);
 
-  const docs = ((evidence as EvidenceRow[]) ?? []).map(toIngestedDoc);
+  const rows = (evidence as (EvidenceRow & { area_code?: string | null })[]) ?? [];
+  const docs = rows.map(toIngestedDoc);
   const root = org?.name ? `${org.name} — evidence vault` : 'evidence vault';
   const result = analyzeSet({ root, roots: [root], docs });
-  return { markdown: renderMaster(result), totals: result.totals };
+
+  // Fold in the evidence-verification pass so the auditor's internal report
+  // shows, per area, which policy claims are backed by a supporting record and
+  // which are policy-only gaps — the heart of an evidence-based audit.
+  const files: VerifiableFile[] = rows.map((e) => {
+    const doc = toIngestedDoc(e);
+    const text = doc.readable ? doc.lines.join('\n') : '';
+    let areaCode = e.area_code ?? null;
+    if (!areaCode && doc.readable) areaCode = classify(doc).area ?? null;
+    return { id: e.id, fileName: e.file_name, text, areaCode };
+  });
+  const verification = verifyEvidence(files);
+  const markdown = `${renderMaster(result)}\n\n${renderVerificationMarkdown(verification)}`;
+  return { markdown, totals: result.totals };
+}
+
+/** Render the verification pass as a review-ready markdown section. */
+function renderVerificationMarkdown(v: VerificationResult): string {
+  const { totals } = v;
+  const lines: string[] = [
+    '---',
+    '',
+    '## Evidence verification — are the policies backed by records?',
+    '',
+    `A policy on its own is not evidence. Of ${totals.items} expected evidence items, ` +
+      `**${totals.verified} are verified** by a supporting record, ` +
+      `**${totals.policyOnly} are policy-only** (the policy exists but the proving record was not supplied), ` +
+      `and **${totals.absent} are absent**. ` +
+      `**${totals.criticalGaps} essential item${totals.criticalGaps === 1 ? '' : 's'}** ${totals.criticalGaps === 1 ? 'is' : 'are'} unverified.`,
+    '',
+  ];
+  for (const area of v.areas) {
+    const gaps = area.items.filter((i) => i.state !== 'verified');
+    if (gaps.length === 0) {
+      lines.push(`### ${area.code}. ${area.area} — ✅ all ${area.items.length} items verified`, '');
+      continue;
+    }
+    lines.push(
+      `### ${area.code}. ${area.area} — ${area.verified}/${area.items.length} verified` +
+        (area.criticalGaps > 0 ? ` · ⚠️ ${area.criticalGaps} essential gap${area.criticalGaps === 1 ? '' : 's'}` : ''),
+      '',
+    );
+    for (const g of gaps) {
+      const tag = g.state === 'policy_only' ? 'POLICY-ONLY' : 'ABSENT';
+      const crit = g.item.critical ? ' **[essential]**' : '';
+      lines.push(`- **${tag}**${crit} — ${g.item.label}: ${g.reason}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 /** Small concurrency pool: fast without overwhelming the connection pooler. */

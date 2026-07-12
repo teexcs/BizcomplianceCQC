@@ -11,6 +11,7 @@ import {
   suggestAreaRag,
 } from '@/lib/audit/scoring';
 import { renderAuditReportPdf } from '@/lib/report/generate';
+import { verifyOrgEvidence } from '@/lib/engine/reader/adapter';
 import { sendEmail } from '@/lib/email/send';
 import {
   documentsIssuedEmail,
@@ -573,6 +574,16 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     (safQuestions as Pick<SafQuestion, 'id' | 'domain' | 'priority'>[]) ?? [],
   );
 
+  // Evidence-verification pass — powers the report's Scope/Methodology/Evidence
+  // Reviewed sections and the policy-vs-record gap accounting. Non-fatal: if it
+  // fails for any reason the report still generates without it.
+  let verification = null;
+  try {
+    verification = await verifyOrgEvidence(audit.org_id);
+  } catch (e) {
+    console.error('[report] verification failed, continuing without it', e);
+  }
+
   const pdf = await renderAuditReportPdf({
     audit,
     organisation: org,
@@ -582,6 +593,7 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     score,
     domainScores,
     breakdown,
+    verification,
   });
 
   const { data: prev } = await admin
