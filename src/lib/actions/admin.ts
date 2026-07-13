@@ -823,6 +823,7 @@ const alertSchema = z.object({
   body: z.string().min(10).max(5000),
   category: z.string().min(2).max(40),
   external_url: z.string().url().max(500).nullable().optional().or(z.literal('')),
+  legislative: z.boolean().optional(),
   published: z.boolean(),
 });
 
@@ -832,22 +833,46 @@ export async function upsertAlert(input: z.infer<typeof alertSchema>): Promise<A
   await requireAdminSession();
 
   const supabase = await createClient();
-  const row = {
-    title: parsed.data.title,
-    body: parsed.data.body,
-    category: parsed.data.category,
-    external_url: parsed.data.external_url || null,
-    source_kind: 'manual',
-    published: parsed.data.published,
-    published_at: parsed.data.published ? new Date().toISOString() : null,
-    approved_at: parsed.data.published ? new Date().toISOString() : null,
-  };
 
   if (parsed.data.id) {
-    const { error } = await supabase.from('alerts').update(row).eq('id', parsed.data.id);
+    // Editing an existing alert (scraped OR manual): update the editable
+    // fields, honour the published toggle, and preserve source_kind/published_at
+    // so editing a scraped item doesn't rewrite its provenance.
+    const { data: existing } = await supabase
+      .from('alerts')
+      .select('published_at')
+      .eq('id', parsed.data.id)
+      .single<{ published_at: string | null }>();
+    const update: Record<string, unknown> = {
+      title: parsed.data.title,
+      body: parsed.data.body,
+      category: parsed.data.category,
+      external_url: parsed.data.external_url || null,
+      published: parsed.data.published,
+    };
+    if (parsed.data.legislative !== undefined) update.legislative = parsed.data.legislative;
+    if (parsed.data.published) {
+      update.approved_at = new Date().toISOString();
+      update.published_at = existing?.published_at ?? new Date().toISOString();
+    } else {
+      // Un-publishing: pull it back to the review queue.
+      update.approved_at = null;
+    }
+    const { error } = await supabase.from('alerts').update(update).eq('id', parsed.data.id);
     if (error) return fail('Could not update the alert.');
   } else {
-    const { error } = await supabase.from('alerts').insert(row);
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('alerts').insert({
+      title: parsed.data.title,
+      body: parsed.data.body,
+      category: parsed.data.category,
+      external_url: parsed.data.external_url || null,
+      source_kind: 'manual',
+      legislative: parsed.data.legislative ?? false,
+      published: parsed.data.published,
+      published_at: parsed.data.published ? now : null,
+      approved_at: parsed.data.published ? now : null,
+    });
     if (error) return fail('Could not create the alert.');
   }
   revalidatePath('/admin/alerts');
@@ -890,6 +915,101 @@ export async function deleteAlert(alertId: string): Promise<ActionResult> {
   revalidatePath('/admin/alerts');
   revalidatePath('/dashboard/alerts');
   return { ok: true };
+}
+
+const pushAlertSchema = z.object({
+  alertId: z.string().uuid(),
+  scope: z.enum(['global', 'per_client']),
+  title: z.string().min(3).max(300),
+  description: z.string().max(2000).optional().or(z.literal('')),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a due date'),
+});
+
+/**
+ * Push a legislation/regulatory alert to client calendars as a dated action.
+ * The founder chooses each time:
+ *   • global      → one calendar_events row (org_id null) every client sees.
+ *   • per_client  → one row per client org, so each can act on it independently.
+ * Idempotent: an existing event already pushed from this alert (matched by
+ * alert_id + org) is updated, not duplicated.
+ */
+export async function pushAlertToCalendars(
+  input: z.infer<typeof pushAlertSchema>,
+): Promise<ActionResult & { pushed?: number }> {
+  const parsed = pushAlertSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Invalid push.');
+  const ctx = await requireAdminSession();
+  const admin = createAdminClient();
+
+  const { data: alert } = await admin
+    .from('alerts')
+    .select('id, title, external_url')
+    .eq('id', parsed.data.alertId)
+    .single<{ id: string; title: string; external_url: string | null }>();
+  if (!alert) return fail('Alert not found.');
+
+  const description =
+    (parsed.data.description || '').trim() ||
+    `Regulatory update${alert.external_url ? ` — details: ${alert.external_url}` : ''}.`;
+
+  // Which orgs to target.
+  let orgIds: (string | null)[];
+  if (parsed.data.scope === 'global') {
+    orgIds = [null];
+  } else {
+    const { data: orgs } = await admin.from('organisations').select('id');
+    orgIds = ((orgs as { id: string }[]) ?? []).map((o) => o.id);
+    if (orgIds.length === 0) return fail('No client organisations to push to.');
+  }
+
+  let pushed = 0;
+  for (const orgId of orgIds) {
+    // De-dupe: has this alert already been pushed to this org?
+    const existingQuery = admin
+      .from('calendar_events')
+      .select('id')
+      .eq('alert_id', alert.id);
+    const existing = orgId
+      ? await existingQuery.eq('org_id', orgId).maybeSingle<{ id: string }>()
+      : await existingQuery.is('org_id', null).maybeSingle<{ id: string }>();
+
+    const row = {
+      org_id: orgId,
+      title: parsed.data.title,
+      description,
+      event_type: 'regulatory',
+      due_date: parsed.data.due_date,
+      source: 'alert',
+      alert_id: alert.id,
+      created_by: ctx.userId,
+    };
+
+    if (existing.data?.id) {
+      await admin.from('calendar_events').update(row).eq('id', existing.data.id);
+    } else {
+      const { error } = await admin.from('calendar_events').insert(row);
+      if (error) continue;
+    }
+    pushed += 1;
+  }
+
+  revalidatePath('/admin/alerts');
+  revalidatePath('/dashboard/calendar');
+  return { ok: true, pushed };
+}
+
+/** Manually run the regulatory feed sync now (admin "Fetch updates" button). */
+export async function runAlertsSyncNow(): Promise<ActionResult & { staged?: number }> {
+  await requireAdminSession();
+  try {
+    const { syncCqcAlerts } = await import('@/lib/alerts/cqc-scrape');
+    const result = await syncCqcAlerts({ notifyAdmins: false });
+    revalidatePath('/admin/alerts');
+    return { ok: true, staged: result.staged };
+  } catch (e) {
+    console.error('[alerts] manual sync failed', e);
+    return fail('Could not fetch updates — try again.');
+  }
 }
 
 const taskSchema = z.object({

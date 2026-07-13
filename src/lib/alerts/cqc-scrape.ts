@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/server';
 import { adminEmails, sendEmail } from '@/lib/email/send';
+import { FEED_SOURCES, fetchFeed, type FeedItem } from '@/lib/alerts/feeds';
 
 type CqcSource = {
   kind: string;
@@ -34,6 +35,12 @@ type FetchResult = {
 };
 
 const CURRENT_YEAR = new Date().getUTCFullYear();
+/**
+ * Earliest year to ingest. Defaults to LAST year so a first run backdates a
+ * full ~18 months (e.g. from January 2025 when run in 2026) — the founder asked
+ * to backfill the last year of CQC changes. Override with CQC_ALERTS_SINCE_YEAR.
+ */
+const SINCE_YEAR = Number(process.env.CQC_ALERTS_SINCE_YEAR) || CURRENT_YEAR - 1;
 const MAX_PAGES_PER_SOURCE = 20;
 const MAX_CANDIDATES_PER_SOURCE = 150;
 const REQUEST_TIMEOUT_MS = 20000;
@@ -119,8 +126,10 @@ export async function syncCqcAlerts(opts: { notifyAdmins?: boolean } = {}): Prom
           publishedAt: candidate.publishedAtHint,
         } satisfies CqcArticle;
       });
+      // Ingest anything from SINCE_YEAR onward (was: current year only, which
+      // silently dropped everything else and blocked backdating).
       const articleYear = article.publishedAt ? new Date(article.publishedAt).getUTCFullYear() : CURRENT_YEAR;
-      if (articleYear !== CURRENT_YEAR) continue;
+      if (articleYear < SINCE_YEAR) continue;
 
       const title = cleanText(article.title);
       const titleId = titleKey(title);
@@ -143,6 +152,51 @@ export async function syncCqcAlerts(opts: { notifyAdmins?: boolean } = {}): Prom
       existingKeys.add(urlId);
       inserted += 1;
       insertedAlerts.push(article);
+    }
+  }
+
+  // ---- Trustworthy RSS/Atom feeds (GOV.UK, NICE, Skills for Care, SCIE,
+  //      legislation, care press) — official structured sources beyond CQC. ----
+  for (const source of FEED_SOURCES) {
+    const feedItems = await fetchFeed(source);
+    for (const item of feedItems) {
+      checked += 1;
+      const itemYear = item.publishedAt ? new Date(item.publishedAt).getUTCFullYear() : CURRENT_YEAR;
+      if (itemYear < SINCE_YEAR) continue;
+
+      // Keep the feed relevant to adult social / domiciliary care.
+      if (!isCareRelevant(item)) continue;
+
+      const title = cleanText(item.title);
+      const titleId = titleKey(title);
+      const urlId = urlKey(item.url);
+      if (existingKeys.has(titleId) || existingKeys.has(urlId)) continue;
+
+      const category = classify(title, item.summary);
+      const { error } = await admin.from('alerts').insert({
+        title,
+        body: buildBody(title, item.summary, item.sourceLabel),
+        category,
+        external_url: item.url,
+        source_kind: item.sourceKind,
+        legislative: item.legislative,
+        published: false,
+        published_at: item.publishedAt ?? new Date().toISOString(),
+        approved_at: null,
+      });
+      if (error) continue;
+
+      existingKeys.add(titleId);
+      existingKeys.add(urlId);
+      inserted += 1;
+      insertedAlerts.push({
+        title,
+        body: buildBody(title, item.summary, item.sourceLabel),
+        category,
+        url: item.url,
+        sourceKind: item.sourceKind,
+        publishedAt: item.publishedAt,
+      });
     }
   }
 
@@ -183,7 +237,7 @@ export async function syncCqcAlerts(opts: { notifyAdmins?: boolean } = {}): Prom
     checked,
     inserted,
     staged: insertedAlerts.length,
-    sources: SOURCES.length,
+    sources: SOURCES.length + FEED_SOURCES.length,
   };
 }
 
@@ -197,18 +251,22 @@ async function crawlSource(source: CqcSource): Promise<CqcCandidate[]> {
     const pageCandidates = extractCandidatesFromListing(response.html, response.url, source, seen);
     candidates.push(...pageCandidates);
 
-    const hasCurrentYear = pageCandidates.some((candidate) => {
+    // Keep paging while the page still has anything in our window; stop once a
+    // page is entirely older than SINCE_YEAR (listings are newest-first).
+    const hasInWindow = pageCandidates.some((candidate) => {
       if (!candidate.publishedAtHint) return true;
-      return new Date(candidate.publishedAtHint).getUTCFullYear() === CURRENT_YEAR;
+      return new Date(candidate.publishedAtHint).getUTCFullYear() >= SINCE_YEAR;
     });
-    const hasOldYear = pageCandidates.some((candidate) => {
-      if (!candidate.publishedAtHint) return false;
-      return new Date(candidate.publishedAtHint).getUTCFullYear() < CURRENT_YEAR;
-    });
+    const allTooOld =
+      pageCandidates.length > 0 &&
+      pageCandidates.every((candidate) => {
+        if (!candidate.publishedAtHint) return false;
+        return new Date(candidate.publishedAtHint).getUTCFullYear() < SINCE_YEAR;
+      });
 
     const nextUrl = extractNextPageUrl(response.html, response.url);
     if (!nextUrl) break;
-    if (hasOldYear && !hasCurrentYear) break;
+    if (allTooOld && !hasInWindow) break;
     pageUrl = nextUrl;
   }
 
@@ -389,6 +447,20 @@ function isLikelyHeadline(title: string, url: string): boolean {
     return false;
   }
   return /\/(news|publication|publications|guidance-regulation|press|updates?)\b/i.test(parsed.pathname);
+}
+
+/**
+ * Keep only items relevant to adult social / domiciliary care. Broad feeds
+ * (GOV.UK, legislation) cover everything, so we require a care-sector signal.
+ * CQC-branded sources are always relevant.
+ */
+const CARE_TERMS =
+  /(care quality commission|\bcqc\b|social care|domiciliary|home care|homecare|care at home|care provider|adult social|safeguard|mental capacity|deprivation of liberty|dols|registered manager|care worker|care home|regulated activit|health and social care act|fundamental standard|single assessment|medicines? management|infection prevention|duty of candour|liberty protection)/i;
+
+function isCareRelevant(item: FeedItem): boolean {
+  if (/^cqc/i.test(item.sourceKind) || /_cqc$/i.test(item.sourceKind)) return true;
+  const hay = `${item.title} ${item.summary}`;
+  return CARE_TERMS.test(hay);
 }
 
 function classify(title: string, body: string): string {

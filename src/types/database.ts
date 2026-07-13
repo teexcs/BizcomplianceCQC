@@ -300,6 +300,7 @@ export interface Alert {
   category: string;
   external_url: string | null;
   source_kind: string;
+  legislative: boolean;
   published: boolean;
   published_at: string | null;
   approved_at: string | null;
@@ -314,6 +315,7 @@ export interface CalendarEvent {
   event_type: string;
   due_date: string;
   source: string;
+  alert_id: string | null;
   created_by: string | null;
   created_at: string;
 }
