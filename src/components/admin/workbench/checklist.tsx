@@ -241,7 +241,9 @@ function EngineBar({ auditId, openSuggestions }: { auditId: string; openSuggesti
       const result = await engineApply(auditId);
       setMessage(
         result.ok && result.apply
-          ? `Applied ${result.apply.applied} statuses, rated ${result.apply.ragsSet} areas, drafted ${result.apply.findingsDrafted} findings, flagged ${result.apply.safFlagged} SAF questions. Score: ${result.apply.score}/100.`
+          ? `Applied ${result.apply.applied} statuses, rated ${result.apply.ragsSet} areas, drafted ${result.apply.findingsDrafted} findings ` +
+            `(${result.apply.findingsFromDocuments} document, ${result.apply.findingsFromVerification} evidence-gap, ${result.apply.findingsFromSampling} sampling), ` +
+            `flagged ${result.apply.safFlagged} SAF questions. Score: ${result.apply.score}/100.`
           : result.error ?? 'Apply failed.',
       );
       router.refresh();

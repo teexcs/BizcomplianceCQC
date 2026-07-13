@@ -7,10 +7,20 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 import { inferSafNegatives } from './saf-crosswalk';
 import { computeReadinessScore, suggestAreaRag } from '@/lib/audit/scoring';
-import { resolveFinding, type GapType } from '@/lib/audit/findings-library';
+import { resolveFinding, type GapType, type ResolvedFinding } from '@/lib/audit/findings-library';
+import { verifyOrgEvidence } from '@/lib/engine/reader/adapter';
 import type { AuditArea, AuditItem, SafQuestion, SafResponse } from '@/types/database';
 
 type Admin = ReturnType<typeof createAdminClient>;
+
+/** file_samples row joined to its evidence file name, for sampling findings. */
+interface SampleRow {
+  sample_type: string;
+  verdict: 'partial' | 'not_compliant';
+  area_code: string | null;
+  findings: string | null;
+  evidence: { file_name: string } | null;
+}
 
 export interface AutopilotStats {
   evidenceScanned: number;
@@ -25,6 +35,10 @@ export interface ApplyStats {
   applied: number;
   ragsSet: number;
   findingsDrafted: number;
+  /** Of findingsDrafted, how many came from each detection source. */
+  findingsFromDocuments: number;
+  findingsFromVerification: number;
+  findingsFromSampling: number;
   safFlagged: number;
   score: number;
 }
@@ -45,6 +59,7 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     .eq('id', auditId)
     .single<{ id: string; org_id: string }>();
   if (!audit) throw new Error('Audit not found');
+  const orgId = audit.org_id;
 
   const { data: items } = await admin.from('audit_items').select('*').eq('audit_id', auditId);
   const allItems = (items as AuditItem[]) ?? [];
@@ -82,13 +97,49 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     }
   });
 
-  // 3. Draft findings for confirmed-missing legal/CQC documents (deduped by title).
+  // 3. Draft findings from every detection source, all through the findings
+  //    library so the wording is consistent and regulator-grade. Deduped by
+  //    title and capped so the action plan stays actionable. The founder edits
+  //    or deletes any of these before the report goes out.
   const { data: existingFindings } = await admin
     .from('audit_findings')
     .select('title')
     .eq('audit_id', auditId);
   const existingTitles = new Set(((existingFindings as { title: string }[]) ?? []).map((f) => f.title));
 
+  const FINDINGS_CAP = 30;
+  const findingRows: Array<Record<string, unknown>> = [];
+  const source = { documents: 0, verification: 0, sampling: 0 };
+
+  /** Push one library-resolved finding if unique and under the cap. */
+  function addFinding(
+    areaCode: string,
+    resolved: ResolvedFinding,
+    key: string,
+    which: keyof typeof source,
+    override?: { severity?: ResolvedFinding['severity']; priority?: ResolvedFinding['priority'] },
+  ): boolean {
+    if (findingRows.length >= FINDINGS_CAP) return false;
+    const title = `${resolved.title} (${key})`;
+    if (existingTitles.has(title)) return false;
+    existingTitles.add(title); // guard against duplicates within this run too
+    findingRows.push({
+      audit_id: auditId,
+      org_id: orgId,
+      area_code: areaCode,
+      severity: override?.severity ?? resolved.severity,
+      title,
+      detail: resolved.detail,
+      recommendation: resolved.recommendation,
+      priority: override?.priority ?? resolved.priority,
+      sort: findingRows.length,
+    });
+    source[which]++;
+    return true;
+  }
+
+  // 3a. Document gaps: confirmed-missing / out-of-date / uncustomised-template
+  //     legal or CQC library items.
   const missing = allItems
     .filter(
       (i) =>
@@ -97,47 +148,61 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     )
     .sort((a, b) => (a.requirement === b.requirement ? a.ref.localeCompare(b.ref) : a.requirement === 'legal' ? -1 : 1));
 
-  let findingsDrafted = 0;
-  const findingRows = [];
   for (const item of missing) {
-    // A "missing" item whose evidence was a template is a distinct, accurate
-    // story: the document exists but was never customised.
     const isTemplate =
       item.status === 'missing' && /un-customised template/i.test(item.suggestion_reason ?? '');
-
-    // Map the detected item state to the library's gap type, then draw
-    // regulator-grade wording from the findings library (per-area where
-    // available, generic otherwise) rather than writing it inline.
     const gap: GapType = isTemplate
       ? 'template'
       : item.status === 'out_of_date'
         ? 'out_of_date'
         : 'missing';
     const resolved = resolveFinding(item.area_code, gap, item.title);
-
-    // The title carries the ref for de-duplication and traceability.
-    const title = `${resolved.title} (${item.ref})`;
-    if (existingTitles.has(title)) continue;
-
-    // A CQC-expected (non-legal) miss is less severe than the library default
-    // (which assumes legal); soften severity/priority to match the requirement.
-    const severity = item.requirement === 'legal' ? resolved.severity : 'amber';
-    const priority = item.requirement === 'legal' ? resolved.priority : 'days_7';
-
-    findingRows.push({
-      audit_id: auditId,
-      org_id: audit.org_id,
-      area_code: item.area_code,
-      severity,
-      title,
-      detail: resolved.detail,
-      recommendation: resolved.recommendation,
-      priority,
-      sort: findingsDrafted,
-    });
-    findingsDrafted++;
-    if (findingsDrafted >= 20) break; // keep the action plan actionable
+    // A CQC-expected (non-legal) miss is less severe than the library default.
+    const override =
+      item.requirement === 'legal'
+        ? undefined
+        : { severity: 'amber' as const, priority: 'days_7' as const };
+    addFinding(item.area_code, resolved, item.ref, 'documents', override);
   }
+
+  // 3b. Verification gaps: a policy is present but the corroborating record
+  //     that proves it in practice was not supplied. Only the essential
+  //     (critical) policy-only items are auto-drafted; the rest are visible in
+  //     the report's Evidence Reviewed section and available via the picker.
+  try {
+    const verification = await verifyOrgEvidence(orgId);
+    for (const area of verification.areas) {
+      for (const it of area.items) {
+        if (it.state !== 'policy_only' || !it.item.critical) continue;
+        const resolved = resolveFinding(area.code, 'policy_only', it.item.label);
+        addFinding(area.code, resolved, `verify:${it.item.id}`, 'verification');
+      }
+    }
+  } catch (e) {
+    console.error('[autopilot] verification draft skipped', e);
+  }
+
+  // 3c. Sampling verdicts: individual client records the auditor judged
+  //     partial or not-compliant become findings, carrying the auditor's own
+  //     notes as the detail so the specific issue is preserved.
+  const { data: samples } = await admin
+    .from('file_samples')
+    .select('sample_type, verdict, area_code, findings, evidence:evidence_files(file_name)')
+    .eq('audit_id', auditId)
+    .in('verdict', ['partial', 'not_compliant']);
+  for (const s of (samples as unknown as SampleRow[]) ?? []) {
+    const areaCode = s.area_code ?? '10'; // fall back to governance if unsorted
+    const gap: GapType = s.verdict === 'partial' ? 'sample_partial' : 'sample_not_compliant';
+    const subject = s.evidence?.file_name ?? 'Sampled record';
+    const resolved = resolveFinding(areaCode, gap, subject);
+    // Preserve the auditor's specific notes — they beat the generic wording.
+    if (s.findings?.trim()) {
+      resolved.detail = `${resolved.detail} Auditor note: ${s.findings.trim()}`;
+    }
+    addFinding(areaCode, resolved, `sample:${subject}`, 'sampling');
+  }
+
+  const findingsDrafted = findingRows.length;
   if (findingRows.length) {
     await admin.from('audit_findings').insert(findingRows);
   }
@@ -186,10 +251,19 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     .in('status', ['intake', 'evidence']);
   await admin.from('audits').update({ score }).eq('id', auditId);
 
-  const stats: ApplyStats = { applied: toApply.length, ragsSet, findingsDrafted, safFlagged, score };
+  const stats: ApplyStats = {
+    applied: toApply.length,
+    ragsSet,
+    findingsDrafted,
+    findingsFromDocuments: source.documents,
+    findingsFromVerification: source.verification,
+    findingsFromSampling: source.sampling,
+    safFlagged,
+    score,
+  };
   await admin.from('engine_runs').insert({
     kind: 'autopilot.apply',
-    org_id: audit.org_id,
+    org_id: orgId,
     audit_id: auditId,
     stats: stats as unknown as Record<string, unknown>,
     duration_ms: Date.now() - started,
