@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import { extractText, kindFromContentType } from './extract';
 import { verifyDocument } from './verify';
 import { inferEvidenceAreaCode } from './classify';
+import { classifyEvidenceArea } from '@/lib/engine/reader/adapter';
 
 /**
  * Runs a single evidence file through the reading engine: download → extract
@@ -50,8 +51,18 @@ export async function processEvidenceExtraction(evidenceId: string): Promise<voi
     .eq('id', file.org_id)
     .single<{ name: string }>();
 
-  // Now that we can read the document, sharpen the area classification.
-  const areaCode = file.area_code ?? inferEvidenceAreaCode(file.file_name, extraction.text);
+  // Categorisation:
+  //  • If the client explicitly chose an area (file.area_code set), honour it.
+  //  • Otherwise ("let the system decide") classify AUTHORITATIVELY from the
+  //    real content using the reader engine — filename library-ref, then title,
+  //    then dominant content signal — falling back to keyword inference on
+  //    filename + text. This is what routes each document to the right area
+  //    based on title AND content, not just the filename.
+  let areaCode = file.area_code;
+  if (!areaCode) {
+    const byContent = classifyEvidenceArea(file.file_name, extraction.text);
+    areaCode = byContent.areaCode ?? inferEvidenceAreaCode(file.file_name, extraction.text);
+  }
 
   const verification = verifyDocument({
     text: extraction.text,

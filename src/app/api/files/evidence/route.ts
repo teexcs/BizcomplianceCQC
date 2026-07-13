@@ -8,7 +8,6 @@ import { promisify } from 'node:util';
 import { getSessionContext } from '@/lib/data/session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
-import { inferEvidenceAreaCode } from '@/lib/evidence/classify';
 
 export const runtime = 'nodejs';
 
@@ -55,7 +54,7 @@ export async function POST(request: Request) {
   if (!ctx || !ctx.org) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
-  if (!rateLimit(`upload:${ctx.userId}`, 30, 60 * 60 * 1000)) {
+  if (!rateLimit(`upload:${ctx.userId}`, 120, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'Upload limit reached — try again later.' }, { status: 429 });
   }
 
@@ -85,9 +84,12 @@ export async function POST(request: Request) {
   }
 
   const safeName = file.name.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
-  // Filename-only guess for the initial row; the async extractor re-classifies
-  // from the document's real content once it has read it.
-  const inferredAreaCode = manualAreaCode ?? inferEvidenceAreaCode(safeName);
+  // "Let the system decide" (no manual area) → leave area_code NULL so the async
+  // extractor classifies authoritatively from the document's real content (the
+  // reader engine). A filename-only guess here would otherwise stick even when
+  // the content says a different area, so we defer to content instead.
+  // When the client explicitly picks a category, we honour it as-is.
+  const inferredAreaCode = manualAreaCode;
   const storagePath = `${ctx.org.id}/${randomUUID()}-${safeName}`;
 
   const admin = createAdminClient();

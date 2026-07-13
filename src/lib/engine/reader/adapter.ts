@@ -387,6 +387,33 @@ export interface ReaderSignal {
 }
 
 /**
+ * Classify one document into a CQC area using the reader engine's own
+ * classifier — filename library-reference first, then document title, then
+ * dominant content signal — the same brain the audit uses. Used to categorise
+ * "let the system decide" uploads authoritatively once the text is read.
+ *
+ * Returns the area code (or null) and how confident the classifier is, so the
+ * caller can decide whether to trust content over a weaker signal.
+ */
+export function classifyEvidenceArea(
+  fileName: string,
+  text: string,
+): { areaCode: string | null; confidence: Classification['confidence'] } {
+  const doc: IngestedDoc = {
+    path: fileName,
+    relPath: fileName,
+    fileName,
+    ext: (fileName.split('.').pop() ?? '').toLowerCase(),
+    readable: text.trim().length > 0,
+    lines: text.replace(/\r\n?/g, '\n').split('\n'),
+    charCount: text.length,
+    warning: null,
+  };
+  const cls = classify(doc);
+  return { areaCode: cls.area ?? null, confidence: cls.confidence };
+}
+
+/**
  * Analyse a batch of evidence rows with the reader and index the result by
  * library reference — the shared building block for both the audit engine
  * (runReaderSuggest) and the live-readiness "renewal" check (live-score.ts),
