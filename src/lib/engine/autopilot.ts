@@ -7,6 +7,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 import { inferSafNegatives } from './saf-crosswalk';
 import { computeReadinessScore, suggestAreaRag } from '@/lib/audit/scoring';
+import { resolveFinding, type GapType } from '@/lib/audit/findings-library';
 import type { AuditArea, AuditItem, SafQuestion, SafResponse } from '@/types/database';
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -103,34 +104,35 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     // story: the document exists but was never customised.
     const isTemplate =
       item.status === 'missing' && /un-customised template/i.test(item.suggestion_reason ?? '');
-    const requiredBy = item.requirement === 'legal' ? 'legally required' : 'expected by CQC';
 
-    const verb = isTemplate ? 'present but not customised' : item.status === 'missing' ? 'not evidenced' : 'out of date';
-    const title = `${item.title} ${verb} (${item.ref})`;
+    // Map the detected item state to the library's gap type, then draw
+    // regulator-grade wording from the findings library (per-area where
+    // available, generic otherwise) rather than writing it inline.
+    const gap: GapType = isTemplate
+      ? 'template'
+      : item.status === 'out_of_date'
+        ? 'out_of_date'
+        : 'missing';
+    const resolved = resolveFinding(item.area_code, gap, item.title);
+
+    // The title carries the ref for de-duplication and traceability.
+    const title = `${resolved.title} (${item.ref})`;
     if (existingTitles.has(title)) continue;
 
-    let detail: string;
-    let recommendation: string;
-    if (isTemplate) {
-      detail = `A document for "${item.title}" exists but is an un-customised template — placeholder text remains, so it would not be accepted as evidence. This item is ${requiredBy}.`;
-      recommendation = `Tailor the template to your service — replace every placeholder field and record the review date — then re-file it under area ${item.area_code}.`;
-    } else if (item.status === 'missing') {
-      detail = `No document matching "${item.title}" was found in the evidence vault. This item is ${requiredBy}.`;
-      recommendation = `Put "${item.title}" in place and file the evidence under area ${item.area_code}. A compliant template can be issued from the BizCompliance library.`;
-    } else {
-      detail = `"${item.title}" was located but is outside its review cycle.`;
-      recommendation = `Review and re-issue "${item.title}", then record the review date in the document control block.`;
-    }
+    // A CQC-expected (non-legal) miss is less severe than the library default
+    // (which assumes legal); soften severity/priority to match the requirement.
+    const severity = item.requirement === 'legal' ? resolved.severity : 'amber';
+    const priority = item.requirement === 'legal' ? resolved.priority : 'days_7';
 
     findingRows.push({
       audit_id: auditId,
       org_id: audit.org_id,
       area_code: item.area_code,
-      severity: item.requirement === 'legal' ? 'red' : 'amber',
+      severity,
       title,
-      detail,
-      recommendation,
-      priority: item.requirement === 'legal' ? 'fix_first' : 'days_7',
+      detail: resolved.detail,
+      recommendation: resolved.recommendation,
+      priority,
       sort: findingsDrafted,
     });
     findingsDrafted++;

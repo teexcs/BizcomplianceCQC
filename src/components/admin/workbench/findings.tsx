@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { upsertFinding, deleteFinding, resolveFinding } from '@/lib/actions/admin';
 import { FINDING_PRIORITY_LABELS } from '@/lib/audit/scoring';
+import { FindingsPicker, type PickedFinding } from './findings-picker';
 import type { AuditFinding, LibraryArea } from '@/types/database';
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -59,6 +60,17 @@ export function Findings({ findings, libraryAreas, auditId }: Props) {
     setShowForm(true);
   }
 
+  function applyPicked(p: PickedFinding) {
+    setForm({
+      area_code: p.area_code,
+      severity: p.severity,
+      title: p.title,
+      detail: p.detail,
+      recommendation: p.recommendation,
+      priority: p.priority,
+    });
+  }
+
   function submit() {
     setError(null);
     startTransition(async () => {
@@ -104,6 +116,7 @@ export function Findings({ findings, libraryAreas, auditId }: Props) {
 
       {showForm ? (
         <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <FindingsPicker onPick={applyPicked} />
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="finding-title">Title</Label>
