@@ -26,6 +26,24 @@ const ALLOWED_TYPES = new Map<string, string>([
   ['image/webp', 'webp'],
 ]);
 
+const EXT_TO_MIME = new Map<string, string>([
+  ['pdf', 'application/pdf'],
+  ['doc', 'application/msword'],
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['xls', 'application/vnd.ms-excel'],
+  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['csv', 'text/csv'],
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['webp', 'image/webp'],
+]);
+
+function fileExt(name: string): string {
+  const match = /\.([^.]+)$/.exec(name.trim());
+  return (match?.[1] ?? '').toLowerCase();
+}
+
 /**
  * Optional malware scan hook. Configure MALWARE_SCAN_COMMAND (e.g. `clamscan`)
  * and MALWARE_SCAN_ARGS in env. Exit code 0 = clean, 1 = infected.
@@ -50,11 +68,22 @@ async function scanFile(bytes: Buffer): Promise<'clean' | 'infected' | 'pending'
 }
 
 export async function POST(request: Request) {
+  try {
+    return await handleUpload(request);
+  } catch (e) {
+    // Catch ANY unhandled throw so the real cause is logged instead of a bare
+    // 500. (scanFile, formData parsing, session, dynamic imports, etc.)
+    console.error('[upload] unhandled error', e);
+    return NextResponse.json({ error: 'Upload failed — please try again.' }, { status: 500 });
+  }
+}
+
+async function handleUpload(request: Request) {
   const ctx = await getSessionContext();
   if (!ctx || !ctx.org) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
-  if (!rateLimit(`upload:${ctx.userId}`, 120, 60 * 60 * 1000)) {
+  if (!rateLimit(`upload:${ctx.userId}`, 500, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'Upload limit reached — try again later.' }, { status: 429 });
   }
 
@@ -69,8 +98,14 @@ export async function POST(request: Request) {
   if (file.size === 0 || file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'File must be between 1 byte and 25MB.' }, { status: 400 });
   }
-  const ext = ALLOWED_TYPES.get(file.type);
-  if (!ext) {
+  // Resolve a REAL MIME type for the storage upload. Trust the browser's
+  // file.type when it's one we allow; otherwise fall back to the extension.
+  // (Bug fix: previously this returned the short extension — e.g. "docx" — and
+  // passed it as the Content-Type header, which Supabase Storage rejects with
+  // "Invalid Content-Type header".)
+  const nameExt = fileExt(file.name);
+  const contentType = ALLOWED_TYPES.has(file.type) ? file.type : EXT_TO_MIME.get(nameExt);
+  if (!contentType) {
     return NextResponse.json(
       { error: 'Unsupported file type. Allowed: PDF, Word, Excel, CSV, PNG, JPG.' },
       { status: 400 },
@@ -95,8 +130,12 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { error: upError } = await admin.storage
     .from('evidence')
-    .upload(storagePath, bytes, { contentType: file.type });
+    .upload(storagePath, bytes, { contentType });
   if (upError) {
+    console.error('[upload] storage upload failed', {
+      file: safeName,
+      message: upError.message,
+    });
     return NextResponse.json({ error: 'Upload failed — please try again.' }, { status: 500 });
   }
 
@@ -108,7 +147,7 @@ export async function POST(request: Request) {
       area_code: inferredAreaCode,
       storage_path: storagePath,
       file_name: safeName,
-      content_type: file.type,
+      content_type: contentType,
       size_bytes: file.size,
       uploaded_by: ctx.userId,
       scan_status: scanStatus,
@@ -117,6 +156,13 @@ export async function POST(request: Request) {
     .select('id')
     .single<{ id: string }>();
   if (dbError) {
+    console.error('[upload] evidence_files insert failed', {
+      file: safeName,
+      code: dbError.code,
+      message: dbError.message,
+      details: dbError.details,
+      hint: dbError.hint,
+    });
     await admin.storage.from('evidence').remove([storagePath]);
     return NextResponse.json({ error: 'Upload failed — please try again.' }, { status: 500 });
   }

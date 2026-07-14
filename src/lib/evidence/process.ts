@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
-import { extractText, kindFromContentType } from './extract';
+import { extractText, kindFromContentType, kindFromFileName } from './extract';
 import { verifyDocument } from './verify';
 import { inferEvidenceAreaCode } from './classify';
 import { classifyEvidenceArea } from '@/lib/engine/reader/adapter';
@@ -42,7 +42,8 @@ export async function processEvidenceExtraction(evidenceId: string): Promise<voi
   }
 
   const bytes = Buffer.from(await blob.arrayBuffer());
-  const kind = kindFromContentType(file.content_type ?? '');
+  const contentKind = kindFromContentType(file.content_type ?? '');
+  const kind = contentKind === 'other' ? kindFromFileName(file.file_name) : contentKind;
   const extraction = await extractText(bytes, kind);
 
   const { data: org } = await admin
