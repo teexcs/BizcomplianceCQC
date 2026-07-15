@@ -9,6 +9,7 @@ import {
   type ApplyStats,
 } from '@/lib/engine/autopilot';
 import { runReaderSuggest, buildAuditAnalysis, verifyOrgEvidence } from '@/lib/engine/reader/adapter';
+import { sweepPendingExtractionsForOrg } from '@/lib/evidence/process';
 import type { VerificationResult } from '@/lib/audit/verification';
 
 export interface EngineActionResult {
@@ -22,6 +23,14 @@ export interface EngineActionResult {
 export async function engineSuggest(auditId: string): Promise<EngineActionResult> {
   await requireAdminSession();
   try {
+    const supabase = await createClient();
+    const { data: audit } = await supabase
+      .from('audits')
+      .select('org_id')
+      .eq('id', auditId)
+      .single<{ org_id: string }>();
+    if (!audit) return { ok: false, error: 'Audit not found.' };
+    await sweepPendingExtractionsForOrg(audit.org_id);
     const suggest = await runReaderSuggest(auditId);
     revalidatePath(`/admin/audits/${auditId}`);
     return { ok: true, suggest };

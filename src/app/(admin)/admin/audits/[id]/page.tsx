@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getAuditWorkbench } from '@/lib/data/admin';
 import { Workbench } from '@/components/admin/workbench/workbench';
+import { DeleteAuditButton } from '@/components/admin/delete-audit-button';
 import { formatDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -40,12 +41,19 @@ export default async function AuditWorkbenchPage({
               {organisation.cqc_location_id ? ` · CQC ${organisation.cqc_location_id}` : ''}
             </p>
           </div>
-          <Link
-            href={`/admin/customers?org=${organisation.id}`}
-            className="text-xs text-[hsl(220,60%,72%)] hover:underline"
-          >
-            Client record
-          </Link>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <Link
+              href={`/admin/customers?org=${organisation.id}`}
+              className="text-xs text-[hsl(220,60%,72%)] hover:underline"
+            >
+              Client record
+            </Link>
+            <DeleteAuditButton
+              auditId={audit.id}
+              organisationName={organisation.name}
+              disabled={Boolean(audit.purchase_id && ['delivered', 'closed'].includes(audit.status))}
+            />
+          </div>
         </div>
       </div>
 

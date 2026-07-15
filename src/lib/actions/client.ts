@@ -7,6 +7,7 @@ import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session'
 import { rateLimit } from '@/lib/rate-limit';
 import { sendEmail, adminEmails } from '@/lib/email/send';
 import { formatQuota } from '@/lib/plans/entitlements';
+import { startAuditForOrg } from '@/lib/audit/start';
 
 export interface ActionResult {
   ok: boolean;
@@ -19,6 +20,31 @@ const requestSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']),
   description: z.string().min(10).max(4000),
 });
+
+export async function startClientAudit(): Promise<ActionResult> {
+  const ctx = await requireOrgSession();
+  if (!rateLimit(`start-audit:${ctx.userId}`, 5, 60 * 60 * 1000)) {
+    return { ok: false, error: 'Too many audit starts — please try again later.' };
+  }
+
+  try {
+    const { audit } = await startAuditForOrg({
+      orgId: ctx.org.id,
+      orgName: ctx.org.name,
+      forceNew: false,
+      autoCreated: false,
+      taskTitle: `Run CQC readiness audit - ${ctx.org.name}`,
+    });
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/evidence');
+    revalidatePath('/admin');
+    revalidatePath('/admin/audits');
+    return { ok: true, id: audit.id };
+  } catch (e) {
+    console.error('[client] audit start failed', e);
+    return { ok: false, error: 'Could not start the audit.' };
+  }
+}
 
 export async function submitRequest(input: z.infer<typeof requestSchema>): Promise<ActionResult> {
   const parsed = requestSchema.safeParse(input);

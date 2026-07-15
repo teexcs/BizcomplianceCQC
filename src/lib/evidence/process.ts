@@ -114,8 +114,6 @@ export async function sweepPendingExtractions(limit = 25): Promise<number> {
     .from('evidence_files')
     .select('id')
     .eq('extract_status', 'pending')
-    .eq('lifecycle_state', 'current')
-    .neq('scan_status', 'infected')
     .order('created_at', { ascending: true })
     .limit(limit);
 
@@ -123,6 +121,25 @@ export async function sweepPendingExtractions(limit = 25): Promise<number> {
   for (const row of rows) {
     await processEvidenceExtraction(row.id).catch((e) =>
       console.error('[evidence] sweep extraction failed', row.id, e),
+    );
+  }
+  return rows.length;
+}
+
+export async function sweepPendingExtractionsForOrg(orgId: string, limit = 500): Promise<number> {
+  const admin = createAdminClient();
+  const { data: pending } = await admin
+    .from('evidence_files')
+    .select('id')
+    .eq('org_id', orgId)
+    .eq('extract_status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  const rows = (pending as { id: string }[]) ?? [];
+  for (const row of rows) {
+    await processEvidenceExtraction(row.id).catch((e) =>
+      console.error('[evidence] org extraction sweep failed', row.id, e),
     );
   }
   return rows.length;

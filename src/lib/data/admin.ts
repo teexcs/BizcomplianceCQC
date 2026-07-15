@@ -201,8 +201,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     supabase
       .from('evidence_files')
       .select('id', { count: 'exact', head: true })
-      .eq('review_status', 'pending')
-      .eq('lifecycle_state', 'current'),
+      .eq('review_status', 'pending'),
     supabase
       .from('requests')
       .select('id', { count: 'exact', head: true })
@@ -251,10 +250,53 @@ export async function getEvidenceQueue(): Promise<EvidenceQueueRow[]> {
   const { data } = await supabase
     .from('evidence_files')
     .select('*, organisation:organisations(id, name)')
-    .eq('lifecycle_state', 'current')
+    .or('lifecycle_state.eq.current,review_status.eq.pending')
     .order('created_at', { ascending: false })
     .limit(200);
   return (data as unknown as EvidenceQueueRow[]) ?? [];
+}
+
+async function getAllPendingEvidence(): Promise<EvidenceQueueRow[]> {
+  const supabase = await createClient();
+  const rows: EvidenceQueueRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data } = await supabase
+      .from('evidence_files')
+      .select('*, organisation:organisations(id, name)')
+      .eq('review_status', 'pending')
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    const page = (data as unknown as EvidenceQueueRow[]) ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+export async function getEvidenceReviewQueues(): Promise<{
+  pending: EvidenceQueueRow[];
+  reviewed: EvidenceQueueRow[];
+}> {
+  const supabase = await createClient();
+  const [pending, reviewedResult] = await Promise.all([
+    getAllPendingEvidence(),
+    supabase
+      .from('evidence_files')
+      .select('*, organisation:organisations(id, name)')
+      .eq('lifecycle_state', 'current')
+      .neq('review_status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ]);
+
+  return {
+    pending,
+    reviewed: (reviewedResult.data as unknown as EvidenceQueueRow[]) ?? [],
+  };
 }
 
 export async function getTasks(): Promise<Task[]> {

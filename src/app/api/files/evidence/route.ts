@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { getSessionContext } from '@/lib/data/session';
 import { createAdminClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { resolveAuditForEvidenceUpload } from '@/lib/audit/start';
 
 export const runtime = 'nodejs';
 
@@ -90,7 +91,7 @@ async function handleUpload(request: Request) {
   const form = await request.formData();
   const file = form.get('file');
   const manualAreaCode = (form.get('area_code') as string | null) || null;
-  const auditId = (form.get('audit_id') as string | null) || null;
+  const requestedAuditId = (form.get('audit_id') as string | null) || null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: 'No file supplied' }, { status: 400 });
@@ -119,6 +120,7 @@ async function handleUpload(request: Request) {
   }
 
   const safeName = file.name.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
+  const audit = await resolveAuditForEvidenceUpload(ctx.org.id, requestedAuditId);
   // "Let the system decide" (no manual area) → leave area_code NULL so the async
   // extractor classifies authoritatively from the document's real content (the
   // reader engine). A filename-only guess here would otherwise stick even when
@@ -143,7 +145,7 @@ async function handleUpload(request: Request) {
     .from('evidence_files')
     .insert({
       org_id: ctx.org.id,
-      audit_id: auditId,
+      audit_id: audit.audit.id,
       area_code: inferredAreaCode,
       storage_path: storagePath,
       file_name: safeName,
@@ -151,6 +153,7 @@ async function handleUpload(request: Request) {
       size_bytes: file.size,
       uploaded_by: ctx.userId,
       scan_status: scanStatus,
+      review_status: 'pending',
       lifecycle_state: 'current',
     })
     .select('id')
@@ -167,29 +170,6 @@ async function handleUpload(request: Request) {
     return NextResponse.json({ error: 'Upload failed — please try again.' }, { status: 500 });
   }
 
-  const previousQuery = admin
-    .from('evidence_files')
-    .select('id')
-    .eq('org_id', ctx.org.id)
-    .eq('lifecycle_state', 'current')
-    .eq('file_name', safeName)
-    .order('created_at', { ascending: false })
-    .limit(1);
-  const previous = inferredAreaCode
-    ? await previousQuery.eq('area_code', inferredAreaCode).maybeSingle<{ id: string }>()
-    : await previousQuery.is('area_code', null).maybeSingle<{ id: string }>();
-
-  if (previous.data?.id) {
-    await admin
-      .from('evidence_files')
-      .update({ lifecycle_state: 'superseded', superseded_by_id: row.id })
-      .eq('id', previous.data.id);
-    await admin
-      .from('evidence_files')
-      .update({ replaces_evidence_id: previous.data.id })
-      .eq('id', row.id);
-  }
-
   // Read the document (extract text + OCR, then content-verify) and refresh the
   // engine match. Fired async so uploads stay fast even when a scanned PDF needs
   // OCR; the row is 'pending' until done and the daily cron sweep is the safety
@@ -203,5 +183,5 @@ async function handleUpload(request: Request) {
     }
   })();
 
-  return NextResponse.json({ ok: true, id: row.id, replaced: previous.data?.id ?? null });
+  return NextResponse.json({ ok: true, id: row.id, replaced: null });
 }

@@ -137,7 +137,7 @@ export function Workbench(props: Props) {
             Findings ({props.findings.filter((f) => f.status === 'open').length})
           </TabsTrigger>
           <TabsTrigger value="sampling" active={tab === 'sampling'} onClick={() => setTab('sampling')}>
-            File sampling ({props.fileSamples.length})
+            Submitted files ({props.evidence.length})
           </TabsTrigger>
           <TabsTrigger value="report" active={tab === 'report'} onClick={() => setTab('report')}>
             Report ({props.reports.length})

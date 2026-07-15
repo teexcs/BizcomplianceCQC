@@ -10,7 +10,7 @@ import {
   safDomainScores,
   suggestAreaRag,
 } from '@/lib/audit/scoring';
-import { renderAuditReportPdf } from '@/lib/report/generate';
+import { renderAuditReportPdf, renderFallbackAuditReportPdf } from '@/lib/report/generate';
 import { verifyOrgEvidence } from '@/lib/engine/reader/adapter';
 import { sendEmail } from '@/lib/email/send';
 import {
@@ -20,6 +20,7 @@ import {
 } from '@/lib/email/templates';
 import { entitlementsFor, siteVisitQuotaForPlan, formatQuota } from '@/lib/plans/entitlements';
 import { buildOrgPatchValues, personalizeDocx } from '@/lib/documents/personalize';
+import { startAuditForOrg } from '@/lib/audit/start';
 import type { PlanId } from '@/lib/stripe/plans';
 import type {
   Audit,
@@ -292,6 +293,43 @@ export async function deleteFileSample(sampleId: string, auditId: string): Promi
   return { ok: true };
 }
 
+const setAreaSchema = z.object({
+  evidenceId: z.string().uuid(),
+  auditId: z.string().uuid(),
+  areaCode: z.string().regex(/^\d{2}$/),
+});
+
+/**
+ * Manually assign (or correct) an evidence file's CQC area. This is how the
+ * auditor rescues an "unclassified" document so it enters the audit — nothing
+ * the engine couldn't auto-sort is ever silently ignored. Validated against the
+ * real library areas so an invalid code can't be set.
+ */
+export async function setEvidenceArea(
+  input: z.infer<typeof setAreaSchema>,
+): Promise<ActionResult> {
+  const parsed = setAreaSchema.safeParse(input);
+  if (!parsed.success) return fail('Invalid area.');
+  await requireAdminSession();
+  const admin = createAdminClient();
+
+  const { data: area } = await admin
+    .from('library_areas')
+    .select('code')
+    .eq('code', parsed.data.areaCode)
+    .maybeSingle<{ code: string }>();
+  if (!area) return fail('Unknown compliance area.');
+
+  const { error } = await admin
+    .from('evidence_files')
+    .update({ area_code: parsed.data.areaCode })
+    .eq('id', parsed.data.evidenceId);
+  if (error) return fail('Could not set the area.');
+
+  revalidatePath(`/admin/audits/${parsed.data.auditId}`);
+  return { ok: true };
+}
+
 export async function resolveFinding(findingId: string, auditId: string): Promise<ActionResult> {
   await requireAdminSession();
   const supabase = await createClient();
@@ -348,23 +386,65 @@ export async function createAuditManually(
   await requireAdminSession();
   const admin = createAdminClient();
 
-  const { data: audit, error } = await admin
-    .from('audits')
-    .insert({
-      org_id: orgId,
+  try {
+    const { audit } = await startAuditForOrg({
+      admin,
+      orgId,
       kind,
-      status: 'evidence',
-      due_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
-    })
-    .select('id')
-    .single<{ id: string }>();
-  if (error || !audit) return fail('Could not create the audit.');
+      forceNew: true,
+      autoCreated: false,
+    });
+    revalidatePath('/admin/audits');
+    revalidatePath('/admin/evidence');
+    return { ok: true, id: audit.id };
+  } catch (e) {
+    console.error('[admin] manual audit create failed', e);
+    return fail('Could not create the audit.');
+  }
+}
 
-  const { error: snapErr } = await admin.rpc('build_audit_snapshot', { p_audit_id: audit.id });
-  if (snapErr) return fail(`Audit created but snapshot failed: ${snapErr.message}`);
+export async function deleteAudit(auditId: string): Promise<ActionResult> {
+  await requireAdminSession();
+  if (!/^[0-9a-f-]{36}$/i.test(auditId)) return fail('Invalid audit.');
 
+  const admin = createAdminClient();
+  const { data: audit, error: auditError } = await admin
+    .from('audits')
+    .select('id, status, purchase_id')
+    .eq('id', auditId)
+    .single<Pick<Audit, 'id' | 'status' | 'purchase_id'>>();
+  if (auditError || !audit) return fail('Audit not found.');
+
+  if (audit.purchase_id && ['delivered', 'closed'].includes(audit.status)) {
+    return fail('Paid delivered audits cannot be deleted from here.');
+  }
+
+  const { data: reports } = await admin
+    .from('reports')
+    .select('storage_path')
+    .eq('audit_id', auditId);
+  const reportPaths = ((reports as { storage_path: string }[]) ?? [])
+    .map((r) => r.storage_path)
+    .filter(Boolean);
+  if (reportPaths.length > 0) {
+    const { error: storageError } = await admin.storage.from('reports').remove(reportPaths);
+    if (storageError) {
+      console.warn('[admin] audit report storage cleanup failed', {
+        auditId,
+        message: storageError.message,
+      });
+    }
+  }
+
+  await admin.from('tasks').delete().eq('audit_id', auditId);
+
+  const { error } = await admin.from('audits').delete().eq('id', auditId);
+  if (error) return fail('Could not delete the audit.');
+
+  revalidatePath('/admin');
   revalidatePath('/admin/audits');
-  return { ok: true, id: audit.id };
+  revalidatePath(`/admin/audits/${auditId}`);
+  return { ok: true };
 }
 
 async function recalculateAudit(auditId: string): Promise<number | null> {
@@ -678,7 +758,7 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     findings: s.findings,
   }));
 
-  const pdf = await renderAuditReportPdf({
+  const reportData = {
     audit,
     organisation: org,
     areas: (areas as AuditArea[]) ?? [],
@@ -689,7 +769,20 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     breakdown,
     verification,
     fileSamples,
-  });
+  };
+
+  let pdf: Buffer;
+  try {
+    pdf = await renderAuditReportPdf(reportData);
+  } catch (e) {
+    console.error('[report] PDF render failed', e);
+    try {
+      pdf = await renderFallbackAuditReportPdf(reportData);
+    } catch (fallbackError) {
+      console.error('[report] fallback PDF render failed', fallbackError);
+      return fail('Could not generate the report PDF. Check the audit text fields and try again.');
+    }
+  }
 
   const { data: prev } = await admin
     .from('reports')

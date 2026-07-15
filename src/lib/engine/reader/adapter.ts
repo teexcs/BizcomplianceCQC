@@ -10,6 +10,9 @@ import { verifyEvidence, type VerifiableFile, type VerificationResult } from '@/
 import { classify as classifyRaw } from './lib/classify.mjs';
 import { analyzeDocument as analyzeDocumentRaw, analyzeSet as analyzeSetRaw } from './lib/analyze.mjs';
 import { renderMaster as renderMasterRaw } from './lib/report.mjs';
+import { AREAS } from './manifest.mjs';
+
+const AREAS_MAP = AREAS as Record<string, string>;
 
 /* ---------- Types mirroring the verbatim engine's output ---------- */
 
@@ -142,14 +145,45 @@ interface ReaderSuggestion {
   reason: string;
 }
 
+/** Signal-coverage of a document against its area's CQC signal set. */
+interface SignalCoverage {
+  criticalFound: number;
+  criticalTotal: number;
+  found: number;
+  total: number;
+  /** Labels of critical signals NOT evidenced — the named risk gaps. */
+  missingCritical: string[];
+}
+
+function signalCoverage(r: AnalyzedDoc): SignalCoverage {
+  const critical = r.signals.filter((s) => s.weight === 'critical');
+  return {
+    criticalFound: critical.filter((s) => s.found).length,
+    criticalTotal: critical.length,
+    found: r.signals.filter((s) => s.found).length,
+    total: r.signals.length,
+    missingCritical: critical.filter((s) => !s.found).map((s) => s.label),
+  };
+}
+
 /**
- * Turn one document's deterministic analysis into an honest checklist
- * suggestion — every reason is a verbatim quote from the client's own file:
+ * Turn one document's deterministic analysis into an honest, PROPORTIONALLY
+ * graded checklist suggestion — every reason is a verbatim quote from the
+ * client's own file, and every gap is a named "not found":
  *   • unfilled placeholders → not acceptable as evidence (present-but-template)
  *   • past its review date  → out of date
- *   • otherwise             → present, citing the exact line that proves it.
+ *   • thin critical-signal coverage → present but with named at-risk gaps, at
+ *     lower confidence, so a shallow policy is never rated as fully compliant.
+ *   • strong coverage       → present, citing the exact line that proves it.
+ *
+ * `areaOnly` = matched by compliance area (client's own doc), not an exact
+ * library template — those are graded more cautiously.
  */
-function deriveReaderSuggestion(r: AnalyzedDoc, evidenceId: string): ReaderSuggestion {
+function deriveReaderSuggestion(
+  r: AnalyzedDoc,
+  evidenceId: string,
+  areaOnly = false,
+): ReaderSuggestion {
   const fileName = r.fileName;
   const placeholder = r.redFlags.find(
     (f) => f.severity === 'critical' && (f.id === 'unfilled-placeholder' || f.id === 'template-artifact'),
@@ -159,8 +193,6 @@ function deriveReaderSuggestion(r: AnalyzedDoc, evidenceId: string): ReaderSugge
       status: 'missing',
       evidenceId,
       confidence: 0.9,
-      // Phrasing includes "un-customised template" so the apply step tells the
-      // accurate "exists but never customised" story in the drafted finding.
       reason: `Matched "${fileName}" but it is an un-customised template — placeholders remain, e.g. "${placeholder.quote}" (line ${placeholder.line}). It would not be accepted as evidence until tailored to your service.`,
     };
   }
@@ -172,15 +204,46 @@ function deriveReaderSuggestion(r: AnalyzedDoc, evidenceId: string): ReaderSugge
       reason: `"${fileName}" is past its review date (${r.review.date}) — "${r.review.quote}" (line ${r.review.line}). Review and re-issue it.`,
     };
   }
+
+  const cov = signalCoverage(r);
   const sig = r.signals.find((s) => s.found && s.citations.length > 0);
   const cite = sig?.citations[0];
+
+  // No evidence signals fired at all → this document does not actually evidence
+  // the area's requirements. Do NOT rate it present; flag for review.
+  if (cov.found === 0) {
+    return {
+      status: 'out_of_date',
+      evidenceId,
+      confidence: 0.35,
+      reason: `"${fileName}" was classified to this area but none of the ${cov.total} CQC evidence signals for it were found in the text. Review manually — it may be the wrong document or too thin to rely on.`,
+    };
+  }
+
+  // Proportional grade: thin critical coverage = present but AT RISK, with the
+  // specific missing signals named. Full/strong coverage = confident present.
+  const criticalRatio = cov.criticalTotal > 0 ? cov.criticalFound / cov.criticalTotal : 1;
+  const thin = criticalRatio < 0.5;
+  const gapNote =
+    cov.missingCritical.length > 0
+      ? ` Not evidenced (still required): ${cov.missingCritical.slice(0, 5).join('; ')}${cov.missingCritical.length > 5 ? `; +${cov.missingCritical.length - 5} more` : ''}.`
+      : '';
+  const proofNote = cite
+    ? `Evidence found in "${fileName}": "${cite.quote}" (line ${cite.line} — ${sig!.label}).`
+    : `Matched "${fileName}" to this item.`;
+
+  // Base confidence on coverage; area-only matches are capped lower still.
+  let confidence = cite ? 0.6 + 0.35 * criticalRatio : 0.55;
+  if (areaOnly) confidence = Math.min(confidence, 0.65);
+  if (thin) confidence = Math.min(confidence, 0.5);
+
   return {
     status: 'present',
     evidenceId,
-    confidence: cite ? 0.95 : 0.7,
-    reason: cite
-      ? `Evidence found in "${fileName}": "${cite.quote}" (line ${cite.line} — ${sig!.label}).`
-      : `Matched "${fileName}" to this item.`,
+    confidence: Number(confidence.toFixed(2)),
+    reason:
+      `${proofNote} Covers ${cov.criticalFound}/${cov.criticalTotal} critical and ${cov.found}/${cov.total} total CQC signals for this area.` +
+      gapNote,
   };
 }
 
@@ -212,9 +275,7 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
     admin
       .from('evidence_files')
       .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
-      .eq('org_id', audit.org_id)
-      .eq('lifecycle_state', 'current')
-      .neq('scan_status', 'infected'),
+      .eq('org_id', audit.org_id),
   ]);
   const allItems = (items as AuditItem[]) ?? [];
   const evRows = (evidence as EvidenceRow[]) ?? [];
@@ -281,18 +342,18 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
     const match = refMatch ?? areaMatch;
     if (match) {
       stats.itemsMatched++;
-      const s = deriveReaderSuggestion(match.result, match.evidenceId);
+      // When matched by area (not an exact library doc), grade cautiously and
+      // say so — the founder should eyeball these before accepting.
+      const byAreaOnly = !refMatch && Boolean(areaMatch);
+      const s = deriveReaderSuggestion(match.result, match.evidenceId, byAreaOnly);
       if (s.status === 'out_of_date') stats.itemsOutOfDate++;
       if (s.status === 'missing') stats.itemsTemplateFlagged++;
-      // When matched by area (not an exact library doc), lower the confidence
-      // and say so — the founder should eyeball these before accepting.
-      const byAreaOnly = !refMatch && Boolean(areaMatch);
       updates.push({
         id: item.id,
         patch: {
           suggested_status: s.status,
           suggested_evidence_id: s.evidenceId,
-          suggestion_confidence: byAreaOnly ? Math.min(s.confidence, 0.6) : s.confidence,
+          suggestion_confidence: s.confidence,
           suggestion_reason: byAreaOnly
             ? `Assessed against your own document "${match.fileName}" (matched by compliance area, not a library template). ${s.reason}`
             : s.reason,
@@ -350,6 +411,9 @@ export interface VaultCoverage {
   areasTotal: number;
   /** Files uploaded but not machine-readable yet (still count for the human audit). */
   unreadableFiles: number;
+  /** Readable files that could not be auto-classified to any CQC area — must be
+   * reviewed manually so nothing is silently ignored. */
+  unclassifiedFiles: number;
   currentFiles: number;
 }
 
@@ -367,9 +431,7 @@ export async function getVaultCoverage(orgId: string): Promise<VaultCoverage> {
     admin
       .from('evidence_files')
       .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
-      .eq('org_id', orgId)
-      .eq('lifecycle_state', 'current')
-      .neq('scan_status', 'infected'),
+      .eq('org_id', orgId),
     admin.from('library_assets').select('ref, area_code, requirement'),
     admin.from('library_areas').select('code', { count: 'exact', head: true }),
   ]);
@@ -380,6 +442,7 @@ export async function getVaultCoverage(orgId: string): Promise<VaultCoverage> {
 
   const matchedRefs = new Set<string>();
   let unreadableFiles = 0;
+  let unclassifiedFiles = 0;
   for (const e of rows) {
     const doc = toIngestedDoc(e);
     if (!doc.readable) {
@@ -389,6 +452,10 @@ export async function getVaultCoverage(orgId: string): Promise<VaultCoverage> {
     const cls = classify(doc);
     const ref = cls.ref ?? refFromName(e.file_name);
     if (ref && byRef.has(ref)) matchedRefs.add(ref);
+    // A readable file that maps to neither a library reference nor a CQC area
+    // would otherwise be invisible to the audit — count it so it is surfaced
+    // for manual review rather than silently ignored.
+    if (!cls.area && !(ref && byRef.has(ref))) unclassifiedFiles++;
   }
 
   const legalRefs = library.filter((a) => a.requirement === 'legal');
@@ -407,8 +474,123 @@ export async function getVaultCoverage(orgId: string): Promise<VaultCoverage> {
     areasCovered: areaSet.size,
     areasTotal: areasTotal ?? 18,
     unreadableFiles,
+    unclassifiedFiles,
     currentFiles: rows.length,
   };
+}
+
+/* ---------- Evidence proof: quoted, per-area trust surface ---------- */
+
+export interface ProvenSignal {
+  label: string;
+  weight: 'critical' | 'expected';
+  /** The verbatim line(s) from the client's own document that prove it. */
+  citations: { fileName: string; line: number; quote: string }[];
+}
+
+export interface AreaProof {
+  areaCode: string;
+  areaName: string;
+  /** Signals evidenced with a real quote from the uploaded documents. */
+  proven: ProvenSignal[];
+  /** Signals the CQC expects but that were NOT found in any uploaded doc. */
+  notFound: { label: string; weight: 'critical' | 'expected' }[];
+  criticalProven: number;
+  criticalTotal: number;
+  /** Files that contributed evidence to this area. */
+  files: string[];
+}
+
+export interface EvidenceProof {
+  areas: AreaProof[];
+  totalProven: number;
+  totalCriticalProven: number;
+  totalCritical: number;
+}
+
+/**
+ * The TRUST surface: for the org's uploaded evidence, return per CQC area every
+ * signal that is actually PROVEN — with the verbatim quote and line number from
+ * the client's own document — and every expected signal that was NOT found.
+ *
+ * This is what lets the auditor (and the report) say, with a citation, "there
+ * IS real evidence supporting this" versus "this was claimed but not evidenced".
+ * Deterministic and quote-backed: nothing is asserted without a line to point
+ * to, and nothing found is hidden.
+ */
+export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
+  const admin = createAdminClient();
+  const { data: evidence } = await admin
+    .from('evidence_files')
+    .select('id, file_name, area_code, extract_status, extracted_text, scan_status, lifecycle_state')
+    .eq('org_id', orgId);
+
+  const rows = (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
+
+  // Analyse each readable doc; group the proven signals by the area the doc
+  // belongs to (stored area first, else the reader's classification).
+  interface Agg {
+    proven: Map<string, ProvenSignal>;
+    notFound: Map<string, { label: string; weight: 'critical' | 'expected' }>;
+    files: Set<string>;
+  }
+  const byArea = new Map<string, Agg>();
+
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) continue;
+    const cls = classify(doc);
+    const area = e.area_code ?? cls.area;
+    if (!area) continue;
+    const result = analyzeDocument(doc, cls);
+
+    let agg = byArea.get(area);
+    if (!agg) {
+      agg = { proven: new Map(), notFound: new Map(), files: new Set() };
+      byArea.set(area, agg);
+    }
+
+    for (const s of result.signals) {
+      if (s.found && s.citations.length > 0) {
+        agg.files.add(e.file_name);
+        const existing = agg.proven.get(s.label) ?? { label: s.label, weight: s.weight, citations: [] };
+        for (const c of s.citations.slice(0, 2)) {
+          existing.citations.push({ fileName: e.file_name, line: c.line, quote: c.quote });
+        }
+        agg.proven.set(s.label, existing);
+        // If it was previously only in notFound (from another doc), it's proven now.
+        agg.notFound.delete(s.label);
+      } else if (!s.found && !agg.proven.has(s.label)) {
+        agg.notFound.set(s.label, { label: s.label, weight: s.weight });
+      }
+    }
+  }
+
+  const areas: AreaProof[] = [];
+  let totalProven = 0;
+  let totalCriticalProven = 0;
+  let totalCritical = 0;
+
+  for (const [areaCode, agg] of [...byArea.entries()].sort()) {
+    const proven = [...agg.proven.values()];
+    const notFound = [...agg.notFound.values()];
+    const criticalProven = proven.filter((p) => p.weight === 'critical').length;
+    const criticalTotal = criticalProven + notFound.filter((n) => n.weight === 'critical').length;
+    totalProven += proven.length;
+    totalCriticalProven += criticalProven;
+    totalCritical += criticalTotal;
+    areas.push({
+      areaCode,
+      areaName: AREAS_MAP[areaCode] ?? `Area ${areaCode}`,
+      proven,
+      notFound,
+      criticalProven,
+      criticalTotal,
+      files: [...agg.files],
+    });
+  }
+
+  return { areas, totalProven, totalCriticalProven, totalCritical };
 }
 
 /** Minimal evidence signal shape shared with live-score-core.ts's EvidenceSignal. */
@@ -488,9 +670,7 @@ export async function verifyOrgEvidence(orgId: string): Promise<VerificationResu
   const { data: evidence } = await admin
     .from('evidence_files')
     .select('id, file_name, area_code, extract_status, extracted_text, scan_status, lifecycle_state')
-    .eq('org_id', orgId)
-    .eq('lifecycle_state', 'current')
-    .neq('scan_status', 'infected');
+    .eq('org_id', orgId);
 
   const rows =
     (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
@@ -534,9 +714,7 @@ export async function buildAuditAnalysis(
     admin
       .from('evidence_files')
       .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
-      .eq('org_id', audit.org_id)
-      .eq('lifecycle_state', 'current')
-      .neq('scan_status', 'infected'),
+      .eq('org_id', audit.org_id),
   ]);
 
   const rows = (evidence as (EvidenceRow & { area_code?: string | null })[]) ?? [];

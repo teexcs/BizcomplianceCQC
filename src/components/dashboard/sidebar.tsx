@@ -15,7 +15,6 @@ import {
   Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { signOut } from '@/lib/actions/auth';
 import { BrandMark } from '@/components/site/brand-mark';
 import { ViewModeCard } from '@/components/view-mode-card';
 import { DashboardThemeToggle } from '@/components/dashboard/theme-toggle';
@@ -108,7 +107,7 @@ export function DashboardSidebar({
       </nav>
 
       <div className="px-4 pb-3">
-        <form action={signOut}>
+        <form action="/logout" method="post">
           <button
             type="submit"
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"

@@ -123,6 +123,28 @@ const styles = StyleSheet.create({
   },
 });
 
+function cleanText(value: unknown, fallback = ''): string {
+  if (value == null) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return fallback;
+}
+
+function cleanRag(value: unknown): RagStatus {
+  return value === 'green' || value === 'amber' || value === 'red' || value === 'unset'
+    ? value
+    : 'unset';
+}
+
+function ReportFooter({ organisationName }: { organisationName: string }) {
+  return (
+    <View style={styles.footer} fixed>
+      <Text>BizCompliance - CQC Readiness Audit - {organisationName}</Text>
+      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+    </View>
+  );
+}
+
 export interface ReportData {
   audit: Audit;
   organisation: Organisation;
@@ -152,7 +174,7 @@ function ReportDoc({ data }: { data: ReportData }) {
   const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples } =
     data;
   const samples = (fileSamples ?? []).filter((s) => s.verdict !== 'unset');
-  const areaName = new Map(libraryAreas.map((a) => [a.code, a.name]));
+  const areaName = new Map(libraryAreas.map((a) => [cleanText(a.code), cleanText(a.name, a.code)]));
   const counts = {
     green: areas.filter((a) => a.rag === 'green').length,
     amber: areas.filter((a) => a.rag === 'amber').length,
@@ -168,7 +190,7 @@ function ReportDoc({ data }: { data: ReportData }) {
       .filter((a) => a.rag === 'green')
       .sort((a, b) => a.area_code.localeCompare(b.area_code));
     for (const a of greenAreas.slice(0, 6)) {
-      out.push(`${a.area_code} ${areaName.get(a.area_code) ?? a.area_code} — compliant, no gaps identified.`);
+      out.push(`${cleanText(a.area_code)} ${areaName.get(a.area_code) ?? cleanText(a.area_code)} - compliant, no gaps identified.`);
     }
     if (verification) {
       const fully = verification.areas.filter(
@@ -192,16 +214,11 @@ function ReportDoc({ data }: { data: ReportData }) {
     year: 'numeric',
   });
 
-  const footer = (
-    <View style={styles.footer} fixed>
-      <Text>BizCompliance — CQC Readiness Audit — {organisation.name}</Text>
-      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
-    </View>
-  );
+  const organisationName = cleanText(organisation.name);
 
   return (
     <Document
-      title={`CQC Readiness Audit — ${organisation.name}`}
+      title={`CQC Readiness Audit - ${organisationName}`}
       author="BizCompliance"
       subject="CQC readiness audit report"
     >
@@ -211,7 +228,7 @@ function ReportDoc({ data }: { data: ReportData }) {
           <Text style={styles.brandSub}>CQC compliance, handled properly</Text>
           <Text style={styles.title}>CQC Readiness Audit</Text>
           <Text style={styles.subtitle}>
-            {organisation.name} · {issued}
+            {organisationName} - {issued}
           </Text>
         </View>
 
@@ -266,7 +283,7 @@ function ReportDoc({ data }: { data: ReportData }) {
         {audit.summary ? (
           <View>
             <Text style={styles.h2}>Executive summary</Text>
-            <Text style={styles.para}>{audit.summary}</Text>
+            <Text style={styles.para}>{cleanText(audit.summary)}</Text>
           </View>
         ) : null}
 
@@ -275,7 +292,7 @@ function ReportDoc({ data }: { data: ReportData }) {
             <Text style={styles.h2}>The five key questions (CQC Single Assessment Framework)</Text>
             {domainScores.map((d) => (
               <View key={d.domain} style={styles.areaRow} wrap={false}>
-                <Text style={styles.areaName}>{d.label}</Text>
+                <Text style={styles.areaName}>{cleanText(d.label, d.domain)}</Text>
                 <View
                   style={{
                     width: 160,
@@ -320,18 +337,20 @@ function ReportDoc({ data }: { data: ReportData }) {
           .map((area) => (
             <View key={area.id} style={styles.areaRow} wrap={false}>
               <Text style={styles.areaName}>
-                {area.area_code} {areaName.get(area.area_code) ?? area.area_code}
+                {cleanText(area.area_code)} {areaName.get(area.area_code) ?? cleanText(area.area_code)}
               </Text>
-              <Text style={[styles.rag, { color: RAG_COLOR[area.rag] }]}>{RAG_LABEL[area.rag]}</Text>
+              <Text style={[styles.rag, { color: RAG_COLOR[cleanRag(area.rag)] }]}>
+                {RAG_LABEL[cleanRag(area.rag)]}
+              </Text>
             </View>
           ))}
-        {footer}
+        <ReportFooter organisationName={organisationName} />
       </Page>
 
       <Page size="A4" style={styles.page}>
         <Text style={styles.h2}>Scope of review</Text>
         <Text style={styles.para}>
-          This is an independent documentation and inspection-readiness review of {organisation.name}
+          This is an independent documentation and inspection-readiness review of {organisationName}
           {' '}against the Health and Social Care Act 2008 (Regulated Activities) Regulations 2014,
           the Fundamental Standards, and the CQC Single Assessment Framework. It covers the 18
           compliance areas relevant to a domiciliary care service: registration, safeguarding,
@@ -370,7 +389,7 @@ function ReportDoc({ data }: { data: ReportData }) {
               .map((a) => (
                 <View key={a.code} style={styles.areaRow} wrap={false}>
                   <Text style={styles.areaName}>
-                    {a.code} {a.area}
+                    {cleanText(a.code)} {cleanText(a.area)}
                   </Text>
                   <Text style={{ fontSize: 9, color: COLORS.muted, width: 150, textAlign: 'right' }}>
                     {a.verified}/{a.items.length} verified
@@ -391,20 +410,22 @@ function ReportDoc({ data }: { data: ReportData }) {
             {samples.map((s, i) => (
               <View key={i} style={{ marginBottom: 8 }} wrap={false}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5, flex: 1, paddingRight: 8 }}>
-                    {s.fileName}
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
+                      {cleanText(s.fileName, 'Sampled file')}
+                    </Text>
                     {s.areaCode ? (
-                      <Text style={{ fontFamily: 'Helvetica', color: COLORS.muted }}>
-                        {'  '}·{'  '}Area {s.areaCode}
+                      <Text style={{ fontSize: 8, color: COLORS.muted }}>
+                        Area {cleanText(s.areaCode)}
                       </Text>
                     ) : null}
-                  </Text>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: SAMPLE_COLOR[s.verdict] }}>
-                    {SAMPLE_VERDICT_LABEL[s.verdict]}
+                  </View>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9, color: SAMPLE_COLOR[s.verdict] ?? COLORS.muted }}>
+                    {SAMPLE_VERDICT_LABEL[s.verdict] ?? cleanText(s.verdict)}
                   </Text>
                 </View>
                 {s.findings ? (
-                  <Text style={styles.findingDetail}>{s.findings}</Text>
+                  <Text style={styles.findingDetail}>{cleanText(s.findings)}</Text>
                 ) : null}
               </View>
             ))}
@@ -421,7 +442,7 @@ function ReportDoc({ data }: { data: ReportData }) {
             ))}
           </View>
         ) : null}
-        {footer}
+        <ReportFooter organisationName={organisationName} />
       </Page>
 
       <Page size="A4" style={styles.page}>
@@ -436,19 +457,21 @@ function ReportDoc({ data }: { data: ReportData }) {
           openFindings.map((f) => (
             <View key={f.id} style={styles.findingCard} wrap={false}>
               <View style={styles.findingHead}>
-                <Text style={[styles.findingTitle, { color: RAG_COLOR[f.severity] }]}>{f.title}</Text>
+                <Text style={[styles.findingTitle, { color: RAG_COLOR[cleanRag(f.severity)] }]}>
+                  {cleanText(f.title, 'Untitled finding')}
+                </Text>
                 <Text style={styles.findingPriority}>
-                  {FINDING_PRIORITY_LABELS[f.priority] ?? f.priority}
+                  {FINDING_PRIORITY_LABELS[f.priority] ?? cleanText(f.priority)}
                 </Text>
               </View>
               {f.area_code ? (
                 <Text style={{ fontSize: 8, color: COLORS.muted, marginBottom: 3 }}>
-                  Area {f.area_code} — {areaName.get(f.area_code) ?? ''}
+                  Area {cleanText(f.area_code)} - {areaName.get(f.area_code) ?? ''}
                 </Text>
               ) : null}
-              {f.detail ? <Text style={styles.findingDetail}>{f.detail}</Text> : null}
+              {f.detail ? <Text style={styles.findingDetail}>{cleanText(f.detail)}</Text> : null}
               {f.recommendation ? (
-                <Text style={styles.findingDetail}>Recommendation: {f.recommendation}</Text>
+                <Text style={styles.findingDetail}>Recommendation: {cleanText(f.recommendation)}</Text>
               ) : null}
             </View>
           ))
@@ -461,19 +484,18 @@ function ReportDoc({ data }: { data: ReportData }) {
           .map((area) => (
             <View key={area.id} style={{ marginBottom: 10 }} wrap={false}>
               <Text style={{ fontFamily: 'Helvetica-Bold', marginBottom: 2 }}>
-                {area.area_code} {areaName.get(area.area_code) ?? ''} —{' '}
-                <Text style={{ color: RAG_COLOR[area.rag] }}>{RAG_LABEL[area.rag]}</Text>
+                {cleanText(area.area_code)} {areaName.get(area.area_code) ?? ''} - {RAG_LABEL[cleanRag(area.rag)]}
               </Text>
               {area.evidence_sighted ? (
-                <Text style={styles.findingDetail}>Evidence sighted: {area.evidence_sighted}</Text>
+                <Text style={styles.findingDetail}>Evidence sighted: {cleanText(area.evidence_sighted)}</Text>
               ) : null}
               {area.findings ? (
-                <Text style={styles.findingDetail}>Findings: {area.findings}</Text>
+                <Text style={styles.findingDetail}>Findings: {cleanText(area.findings)}</Text>
               ) : null}
               {area.action ? (
                 <Text style={styles.findingDetail}>
-                  Action: {area.action}
-                  {area.owner ? ` (Owner: ${area.owner})` : ''}
+                  Action: {cleanText(area.action)}
+                  {area.owner ? ` (Owner: ${cleanText(area.owner)})` : ''}
                 </Text>
               ) : null}
             </View>
@@ -493,7 +515,7 @@ function ReportDoc({ data }: { data: ReportData }) {
           the law and for the accuracy and completeness of the evidence submitted. This report is
           issued as an editable readiness toolset to support your own quality assurance.
         </Text>
-        {footer}
+        <ReportFooter organisationName={organisationName} />
       </Page>
     </Document>
   );
@@ -501,4 +523,131 @@ function ReportDoc({ data }: { data: ReportData }) {
 
 export async function renderAuditReportPdf(data: ReportData): Promise<Buffer> {
   return renderToBuffer(<ReportDoc data={data} />);
+}
+
+function FallbackReportDoc({ data }: { data: ReportData }) {
+  const organisationName = cleanText(data.organisation.name, 'Client');
+  const issued = new Date().toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const areaName = new Map(
+    data.libraryAreas.map((a) => [cleanText(a.code), cleanText(a.name, a.code)]),
+  );
+  const areas = [...data.areas].sort((a, b) =>
+    cleanText(a.area_code).localeCompare(cleanText(b.area_code)),
+  );
+  const openFindings = data.findings.filter((f) => cleanText(f.status) === 'open');
+  const samples = (data.fileSamples ?? []).filter((s) => cleanText(s.verdict) !== 'unset');
+
+  return (
+    <Document
+      title={`CQC Readiness Audit - ${organisationName}`}
+      author="BizCompliance"
+      subject="CQC readiness audit report"
+    >
+      <Page size="A4" style={styles.page}>
+        <View style={styles.headerBar}>
+          <Text style={styles.brand}>BizCompliance</Text>
+          <Text style={styles.brandSub}>CQC compliance, handled properly</Text>
+          <Text style={styles.title}>CQC Readiness Audit</Text>
+          <Text style={styles.subtitle}>
+            {organisationName} - {issued}
+          </Text>
+        </View>
+
+        <Text style={styles.h2}>Readiness position</Text>
+        <Text style={styles.para}>Readiness score: {data.score}/100</Text>
+        {data.audit.summary ? (
+          <Text style={styles.para}>{cleanText(data.audit.summary)}</Text>
+        ) : (
+          <Text style={styles.para}>
+            This report summarises the audit areas, findings and sampled evidence reviewed by
+            BizCompliance.
+          </Text>
+        )}
+        {data.breakdown?.legalWarning ? (
+          <Text style={[styles.findingDetail, { color: COLORS.red }]}>
+            {cleanText(data.breakdown.legalWarning)}
+          </Text>
+        ) : null}
+
+        <Text style={styles.h2}>Compliance area assessment</Text>
+        {areas.length > 0 ? (
+          areas.map((area) => {
+            const rag = cleanRag(area.rag);
+            return (
+              <View key={area.id} style={styles.areaRow} wrap={false}>
+                <Text style={styles.areaName}>
+                  {cleanText(area.area_code)} {areaName.get(cleanText(area.area_code)) ?? ''}
+                </Text>
+                <Text style={[styles.rag, { color: RAG_COLOR[rag] }]}>{RAG_LABEL[rag]}</Text>
+              </View>
+            );
+          })
+        ) : (
+          <Text style={styles.para}>No audit areas were available for this report.</Text>
+        )}
+
+        <Text style={styles.h2}>Priority findings</Text>
+        {openFindings.length > 0 ? (
+          openFindings.map((finding) => (
+            <View key={finding.id} style={styles.findingCard} wrap={false}>
+              <Text style={styles.findingTitle}>
+                {cleanText(finding.title, 'Untitled finding')}
+              </Text>
+              {finding.area_code ? (
+                <Text style={styles.findingDetail}>Area: {cleanText(finding.area_code)}</Text>
+              ) : null}
+              {finding.detail ? (
+                <Text style={styles.findingDetail}>{cleanText(finding.detail)}</Text>
+              ) : null}
+              {finding.recommendation ? (
+                <Text style={styles.findingDetail}>
+                  Recommendation: {cleanText(finding.recommendation)}
+                </Text>
+              ) : null}
+            </View>
+          ))
+        ) : (
+          <Text style={styles.para}>No open findings were recorded.</Text>
+        )}
+      </Page>
+
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.h2}>File sampling</Text>
+        {samples.length > 0 ? (
+          samples.map((sample, index) => (
+            <View key={`${cleanText(sample.fileName, 'sample')}-${index}`} style={styles.findingCard} wrap={false}>
+              <Text style={styles.findingTitle}>{cleanText(sample.fileName, 'Sampled file')}</Text>
+              <Text style={styles.findingDetail}>
+                Verdict: {SAMPLE_VERDICT_LABEL[cleanText(sample.verdict) as ReportFileSample['verdict']] ?? cleanText(sample.verdict)}
+              </Text>
+              {sample.areaCode ? (
+                <Text style={styles.findingDetail}>Area: {cleanText(sample.areaCode)}</Text>
+              ) : null}
+              {sample.findings ? (
+                <Text style={styles.findingDetail}>{cleanText(sample.findings)}</Text>
+              ) : null}
+            </View>
+          ))
+        ) : (
+          <Text style={styles.para}>No reviewed file samples were recorded.</Text>
+        )}
+
+        <Text style={styles.h2}>Scope and limitations</Text>
+        <Text style={[styles.para, { fontSize: 8.5, color: COLORS.muted }]}>
+          This is an independent documentation and inspection-readiness review. BizCompliance is
+          not the Care Quality Commission and is not affiliated with it. This review is not an
+          inspection and does not guarantee any inspection rating or outcome. Findings are based
+          only on the documents and records supplied for review.
+        </Text>
+      </Page>
+    </Document>
+  );
+}
+
+export async function renderFallbackAuditReportPdf(data: ReportData): Promise<Buffer> {
+  return renderToBuffer(<FallbackReportDoc data={data} />);
 }

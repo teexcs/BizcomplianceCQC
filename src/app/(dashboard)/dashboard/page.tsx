@@ -14,6 +14,7 @@ import { PlanPanel } from '@/components/dashboard/plan-panel';
 import { ScoreTrend } from '@/components/dashboard/score-trend';
 import { ScoreChangePanel } from '@/components/dashboard/score-change-panel';
 import { ScoreBreakdownPanel } from '@/components/dashboard/score-breakdown';
+import { StartAuditButton } from '@/components/dashboard/start-audit-button';
 import { ScoreDial, ScoreBarRow } from '@/components/score-dial';
 import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
 import {
@@ -92,12 +93,16 @@ export default async function DashboardOverviewPage() {
             work the same way every time.
           </p>
         </div>
-        <Link
-          href={latest ? '/dashboard/evidence' : '/pricing'}
-          className="inline-flex items-center gap-2 rounded-none border border-[hsl(220,50%,15%)] bg-[hsl(220,50%,15%)] px-4 py-2.5 text-sm font-medium text-[hsl(36,33%,97%)] transition-colors hover:bg-[hsl(220,50%,20%)]"
-        >
-          {latest ? 'Upload evidence' : 'Book your CQC audit'} <ArrowRight size={16} aria-hidden="true" />
-        </Link>
+        {latest ? (
+          <Link
+            href="/dashboard/evidence"
+            className="inline-flex items-center gap-2 rounded-none border border-[hsl(220,50%,15%)] bg-[hsl(220,50%,15%)] px-4 py-2.5 text-sm font-medium text-[hsl(36,33%,97%)] transition-colors hover:bg-[hsl(220,50%,20%)]"
+          >
+            Upload evidence <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+        ) : (
+          <StartAuditButton label="Start audit workspace" />
+        )}
       </div>
 
       {coverage ? (
@@ -152,12 +157,7 @@ export default async function DashboardOverviewPage() {
             your evidence across all 18 compliance areas, delivered with a readiness score,
             risk-rated findings and a priority action plan.
           </p>
-          <Link
-            href="/pricing"
-            className="inline-flex items-center gap-2 rounded-md bg-[hsl(220,50%,15%)] px-6 py-3 text-sm font-medium text-[hsl(36,33%,97%)] transition-colors hover:bg-[hsl(220,50%,15%)]/90"
-          >
-            Book your CQC audit <ArrowRight size={16} aria-hidden="true" />
-          </Link>
+          <StartAuditButton label="Start audit workspace" />
         </div>
       </div>
     );

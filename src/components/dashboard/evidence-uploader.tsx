@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Trash2, UploadCloud, FolderUp } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { BoxedDropdown } from '@/components/site/boxed-dropdown';
+import { startClientAudit } from '@/lib/actions/client';
 import type { EvidenceFile } from '@/types/database';
 
 const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp';
@@ -167,10 +168,17 @@ function normalizeFileName(fileName: string) {
     .trim();
 }
 
-export function EvidenceUploader({ existingFiles }: { existingFiles: UploadedFilePreview[] }) {
+export function EvidenceUploader({
+  existingFiles,
+  activeAuditId,
+}: {
+  existingFiles: UploadedFilePreview[];
+  activeAuditId?: string | null;
+}) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const [auditId, setAuditId] = useState(activeAuditId ?? null);
   const [fileType, setFileType] = useState('');
   const [queuedFiles, setQueuedFiles] = useState<QueueItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -253,9 +261,13 @@ export function EvidenceUploader({ existingFiles }: { existingFiles: UploadedFil
     setSkipped(0);
   }
 
-  async function uploadOne(item: QueueItem): Promise<{ ok: boolean; replaced: boolean; error?: string }> {
+  async function uploadOne(
+    item: QueueItem,
+    resolvedAuditId: string,
+  ): Promise<{ ok: boolean; replaced: boolean; error?: string }> {
     const form = new FormData();
     form.append('file', item.file);
+    form.append('audit_id', resolvedAuditId);
     const selected = FILE_TYPE_OPTIONS.find((option) => option.value === fileType);
     if (selected?.areaCode) form.append('area_code', selected.areaCode);
     try {
@@ -273,6 +285,20 @@ export function EvidenceUploader({ existingFiles }: { existingFiles: UploadedFil
     setMessage(null);
     setProgress({ done: 0, total: items.length });
 
+    let resolvedAuditId = auditId;
+    if (!resolvedAuditId) {
+      const started = await startClientAudit();
+      if (!started.ok || !started.id) {
+        setBusy(false);
+        setProgress(null);
+        setMessage({ tone: 'error', text: started.error ?? 'Could not start the audit.' });
+        return;
+      }
+      resolvedAuditId = started.id;
+      setAuditId(started.id);
+    }
+    const uploadAuditId: string = resolvedAuditId;
+
     let okCount = 0;
     let replacedCount = 0;
     let firstError: string | null = null;
@@ -284,7 +310,7 @@ export function EvidenceUploader({ existingFiles }: { existingFiles: UploadedFil
     async function worker() {
       while (index < items.length) {
         const item = items[index++];
-        const r = await uploadOne(item);
+        const r = await uploadOne(item, uploadAuditId);
         if (r.ok) {
           okCount++;
           if (r.replaced) replacedCount++;

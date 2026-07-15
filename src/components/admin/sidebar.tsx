@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { signOut } from '@/lib/actions/auth';
 import { BrandMark } from '@/components/site/brand-mark';
 import { ViewModeCard } from '@/components/view-mode-card';
 import type { ViewMode } from '@/lib/view-mode';
@@ -96,7 +95,7 @@ export function AdminSidebar({
         <p className="px-4 text-xs text-muted-foreground truncate" title={email}>
           {email}
         </p>
-        <form action={signOut}>
+        <form action="/logout" method="post">
           <button
             type="submit"
             className="mt-2 w-full flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"

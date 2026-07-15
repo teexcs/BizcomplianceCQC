@@ -1,16 +1,13 @@
-import { getEvidenceQueue, getLibrary } from '@/lib/data/admin';
+import { getEvidenceReviewQueues, getLibrary } from '@/lib/data/admin';
 import { EvidenceReviewRow } from '@/components/admin/evidence-review-row';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminEvidencePage() {
-  const [queue, { areas }] = await Promise.all([getEvidenceQueue(), getLibrary()]);
+  const [{ pending, reviewed }, { areas }] = await Promise.all([getEvidenceReviewQueues(), getLibrary()]);
   const areaName = new Map(areas.map((a) => [a.code, a.name]));
 
-  const pending = queue.filter((e) => e.review_status === 'pending');
-  const done = queue.filter((e) => e.review_status !== 'pending');
-
-  const toRow = (e: (typeof queue)[number]) => ({
+  const toRow = (e: (typeof pending)[number]) => ({
     id: e.id,
     file_name: e.file_name,
     content_type: e.content_type,
@@ -51,14 +48,14 @@ export default async function AdminEvidencePage() {
         )}
       </section>
 
-      {done.length > 0 ? (
+      {reviewed.length > 0 ? (
         <section>
           <h2 className="font-display text-lg tracking-tight mb-3">
             Reviewed{' '}
-            <span className="text-sm text-muted-foreground font-sans">({done.length})</span>
+            <span className="text-sm text-muted-foreground font-sans">({reviewed.length})</span>
           </h2>
           <ul className="space-y-3">
-            {done.slice(0, 30).map((e) => (
+            {reviewed.map((e) => (
               <EvidenceReviewRow key={e.id} row={toRow(e)} />
             ))}
           </ul>

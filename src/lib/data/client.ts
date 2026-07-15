@@ -195,6 +195,20 @@ export async function getLatestAudit(orgId: string): Promise<ClientAuditSummary 
   };
 }
 
+export async function getActiveAuditId(orgId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('audits')
+    .select('id')
+    .eq('org_id', orgId)
+    .in('status', ['intake', 'evidence', 'in_review', 'report_draft'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  return data?.id ?? null;
+}
+
 export async function getLibraryAreas(): Promise<LibraryArea[]> {
   const supabase = await createClient();
   const { data } = await supabase.from('library_areas').select('*').order('sort');

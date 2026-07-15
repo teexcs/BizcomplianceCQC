@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { getAuditPipeline, getOrganisations } from '@/lib/data/admin';
 import { AUDIT_STATUS_LABELS } from '@/lib/audit/scoring';
 import { CreateAuditButton } from '@/components/admin/create-audit-button';
+import { DeleteAuditButton } from '@/components/admin/delete-audit-button';
 import { formatDate } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -58,9 +59,15 @@ export default async function AdminAuditsPage() {
             ) : (
               <div className="grid gap-3">
                 {rows.map((a) => (
-                  <Link key={a.id} href={`/admin/audits/${a.id}`}>
-                    <Card className="hover:ring-1 hover:ring-[hsl(220,45%,55%)]/40 transition-shadow">
-                      <CardContent className="py-4 flex flex-wrap items-center gap-4">
+                  <Card
+                    key={a.id}
+                    className="hover:ring-1 hover:ring-[hsl(220,45%,55%)]/40 transition-shadow"
+                  >
+                    <CardContent className="py-4 flex flex-wrap items-center gap-4">
+                      <Link
+                        href={`/admin/audits/${a.id}`}
+                        className="flex min-w-0 flex-1 flex-wrap items-center gap-4"
+                      >
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#242b38] to-[#0d1626] grid place-items-center text-[hsl(220,60%,72%)] text-xs font-bold shrink-0">
                           {(a.organisation?.name ?? '??')
                             .split(' ')
@@ -87,9 +94,14 @@ export default async function AdminAuditsPage() {
                         <Badge className={STATUS_STYLES[a.status] ?? ''}>
                           {AUDIT_STATUS_LABELS[a.status]}
                         </Badge>
-                      </CardContent>
-                    </Card>
-                  </Link>
+                      </Link>
+                      <DeleteAuditButton
+                        auditId={a.id}
+                        organisationName={a.organisation?.name ?? 'Unknown client'}
+                        disabled={Boolean(a.purchase_id && ['delivered', 'closed'].includes(a.status))}
+                      />
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             )}

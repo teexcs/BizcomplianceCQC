@@ -147,6 +147,12 @@ export interface EvidenceFile {
   uploaded_by: string | null;
   scan_status: ScanStatus;
   review_status: ReviewStatus;
+  extract_status: 'pending' | 'done' | 'unsupported' | 'failed';
+  extract_method: string | null;
+  word_count: number | null;
+  extracted_at: string | null;
+  verification: Record<string, unknown> | null;
+  verified_at: string | null;
   lifecycle_state: EvidenceLifecycleState;
   replaces_evidence_id: string | null;
   superseded_by_id: string | null;

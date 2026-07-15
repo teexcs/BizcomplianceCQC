@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { requireOrgSession } from '@/lib/data/session';
-import { getEvidenceFiles } from '@/lib/data/client';
+import { getActiveAuditId, getEvidenceFiles } from '@/lib/data/client';
 import { getVaultCoverage } from '@/lib/engine/reader/adapter';
 import { EvidenceUploader } from '@/components/dashboard/evidence-uploader';
 import { EvidenceRequestList } from '@/components/dashboard/evidence-request-list';
@@ -38,12 +38,17 @@ function ageLabel(date: string): string {
 
 export default async function EvidencePage() {
   const ctx = await requireOrgSession();
-  const [files, coverage] = await Promise.all([
+  const [files, coverage, activeAuditId] = await Promise.all([
     getEvidenceFiles(ctx.org.id),
     getVaultCoverage(ctx.org.id),
+    getActiveAuditId(ctx.org.id),
   ]);
-  const currentFiles = files.filter((f) => f.lifecycle_state !== 'superseded');
-  const supersededFiles = files.filter((f) => f.lifecycle_state === 'superseded');
+  const currentFiles = files.filter(
+    (f) => f.lifecycle_state !== 'superseded' || f.review_status === 'pending',
+  );
+  const supersededFiles = files.filter(
+    (f) => f.lifecycle_state === 'superseded' && f.review_status !== 'pending',
+  );
   const coveragePct =
     coverage.libraryTotal > 0 ? Math.round((coverage.matched / coverage.libraryTotal) * 100) : 0;
   const unsorted = currentFiles.filter((f) => !f.area_code);
@@ -67,8 +72,8 @@ export default async function EvidencePage() {
         <div className="space-y-2">
           <h1 className="font-display text-3xl tracking-tight">Evidence vault</h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Upload your policies, registers, audits and records here. Each upload fills the
-            progress bar so you can see the dashboard move forward.
+            Upload your policies, registers, audits and records here. If no audit is active, the
+            first upload starts one and connects these files to the admin review engine.
           </p>
         </div>
 
@@ -229,7 +234,7 @@ export default async function EvidencePage() {
           </div>
         ) : null}
 
-        <EvidenceUploader existingFiles={currentFiles} />
+        <EvidenceUploader existingFiles={currentFiles} activeAuditId={activeAuditId} />
 
         <EvidenceRequestList />
       </div>

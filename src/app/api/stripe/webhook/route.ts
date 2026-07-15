@@ -9,10 +9,9 @@ import {
   auditPurchasedAdminEmail,
   subscriptionStartedEmail,
 } from '@/lib/email/templates';
+import { startAuditForOrg } from '@/lib/audit/start';
 
 export const runtime = 'nodejs';
-
-const AUDIT_TURNAROUND_HOURS = 48;
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -153,33 +152,16 @@ async function handleCheckoutCompleted(supabase: AdminClient, session: Stripe.Ch
       .select('id')
       .single<{ id: string }>();
 
-    const dueAt = new Date(Date.now() + AUDIT_TURNAROUND_HOURS * 3600 * 1000).toISOString();
-    const { data: audit } = await supabase
-      .from('audits')
-      .insert({
-        org_id: orgId,
-        kind: 'one_off',
-        status: 'evidence',
-        purchase_id: purchase?.id ?? null,
-        due_at: dueAt,
-      })
-      .select('id')
-      .single<{ id: string }>();
-
-    if (audit) {
-      // Snapshot the 139-item checklist + 18 areas + 68 SAF questions.
-      const { error: snapErr } = await supabase.rpc('build_audit_snapshot', { p_audit_id: audit.id });
-      if (snapErr) console.error('[stripe] build_audit_snapshot failed', snapErr.message);
-
-      await supabase.from('tasks').insert({
-        title: `Run CQC readiness audit — ${org.name}`,
-        org_id: orgId,
-        audit_id: audit.id,
-        kind: 'audit',
-        priority: 'high',
-        due_date: dueAt.slice(0, 10),
-      });
-    }
+    await startAuditForOrg({
+      admin: supabase,
+      orgId,
+      orgName: org.name,
+      kind: 'one_off',
+      purchaseId: purchase?.id ?? null,
+      forceNew: true,
+      autoCreated: false,
+      taskTitle: `Run CQC readiness audit - ${org.name}`,
+    });
 
     const { data: owner } = await supabase
       .from('profiles')

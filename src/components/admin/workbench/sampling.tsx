@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileSearch, Check } from 'lucide-react';
+import { Check, FileSearch, ScanSearch, Wand2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { saveFileSample, deleteFileSample } from '@/lib/actions/admin';
+import { saveFileSample, deleteFileSample, setEvidenceArea } from '@/lib/actions/admin';
+import { engineApply, engineSuggest } from '@/lib/actions/engine';
 import { AREAS } from '@/lib/engine/reader/manifest.mjs';
 import type { EvidenceFile, FileSample, SampleVerdict } from '@/types/database';
 
@@ -55,6 +56,22 @@ function guessType(name: string): string {
   return 'other';
 }
 
+const EXTRACT_STYLE: Record<string, string> = {
+  done: 'bg-green-500/15 text-green-300',
+  pending: 'bg-amber-500/15 text-amber-300',
+  unsupported: 'bg-muted text-muted-foreground',
+  failed: 'bg-red-500/15 text-red-300',
+};
+
+function extractLabel(file: EvidenceFile): string {
+  if (file.extract_status === 'done') {
+    return file.word_count ? `scanned · ${file.word_count} words` : 'scanned';
+  }
+  if (file.extract_status === 'pending') return 'awaiting scan';
+  if (file.extract_status === 'unsupported') return 'manual review';
+  return 'scan failed';
+}
+
 interface Props {
   auditId: string;
   evidence: EvidenceFile[];
@@ -71,6 +88,7 @@ export function Sampling({ auditId, evidence, samples }: Props) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
   // Local draft notes/type per evidence id so typing is responsive.
   const [drafts, setDrafts] = useState<Record<string, { type: string; notes: string }>>({});
 
@@ -79,16 +97,10 @@ export function Sampling({ auditId, evidence, samples }: Props) {
     [samples],
   );
 
-  // Only current, non-infected files are worth sampling.
-  const files = useMemo(
-    () =>
-      evidence.filter(
-        (e) => e.lifecycle_state === 'current' && e.scan_status !== 'infected',
-      ),
-    [evidence],
-  );
-
+  const files = useMemo(() => evidence, [evidence]);
   const reviewed = files.filter((f) => sampleByEvidence.has(f.id)).length;
+  const scanned = files.filter((f) => f.extract_status === 'done').length;
+  const pendingScan = files.filter((f) => f.extract_status === 'pending').length;
 
   function draftFor(f: EvidenceFile): { type: string; notes: string } {
     const existing = sampleByEvidence.get(f.id);
@@ -130,29 +142,96 @@ export function Sampling({ auditId, evidence, samples }: Props) {
     });
   }
 
+  function assignArea(f: EvidenceFile, areaCode: string) {
+    if (!areaCode) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await setEvidenceArea({ evidenceId: f.id, auditId, areaCode });
+      if (!res.ok) setError(res.error ?? 'Could not assign the area.');
+      else router.refresh();
+    });
+  }
+
+  function runScan() {
+    setError(null);
+    setScanMessage(null);
+    startTransition(async () => {
+      const result = await engineSuggest(auditId);
+      if (!result.ok || !result.suggest) {
+        setError(result.error ?? 'Could not scan the submitted files.');
+        return;
+      }
+      setScanMessage(
+        `Scan complete: ${result.suggest.evidenceScanned} files scanned, ${result.suggest.itemsMatched} matched to the audit checklist, ${result.suggest.itemsSuggestedMissing} likely gaps flagged.`,
+      );
+      router.refresh();
+    });
+  }
+
+  function applyScan() {
+    setError(null);
+    setScanMessage(null);
+    startTransition(async () => {
+      const result = await engineApply(auditId);
+      if (!result.ok || !result.apply) {
+        setError(result.error ?? 'Could not apply the scan to the audit.');
+        return;
+      }
+      setScanMessage(
+        `Applied to audit: ${result.apply.applied} checklist statuses, ${result.apply.ragsSet} area ratings, ${result.apply.findingsDrafted} findings. Score: ${result.apply.score}/100.`,
+      );
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-border bg-card px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium">
-            <FileSearch size={15} className="mr-1.5 -mt-0.5 inline" aria-hidden="true" />
-            File sampling — read individual records in depth
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {reviewed}/{files.length} files sampled
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">
+              <FileSearch size={15} className="mr-1.5 -mt-0.5 inline" aria-hidden="true" />
+              Submitted files — scan and sample evidence
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {files.length} submitted · {scanned} scanned · {pendingScan} awaiting scan · {reviewed} sampled
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || files.length === 0}
+              onClick={runScan}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <ScanSearch size={14} aria-hidden="true" /> {busy ? 'Working...' : 'Run scan'}
+            </button>
+            <button
+              type="button"
+              disabled={busy || files.length === 0}
+              onClick={applyScan}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              <Wand2 size={14} aria-hidden="true" /> Apply scan to audit
+            </button>
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Pull specific records (care plans, MAR charts, staff files) and check them for
-          completeness, consistency and regulatory alignment. Your verdict and notes appear in the
-          report&apos;s file-sampling section.
+          This is the audit evidence inbox. Run scan reads the uploaded documents and maps them to
+          the audit checklist. Use sampling below for deeper manual checks on care plans, MAR
+          charts, staff files and other records.
         </p>
         {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
+        {scanMessage ? (
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {scanMessage}
+          </p>
+        ) : null}
       </div>
 
       {files.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-          No current evidence files to sample yet. Files uploaded by the client will appear here.
+          No submitted evidence files for this client yet.
         </p>
       ) : (
         <ul className="space-y-3">
@@ -165,14 +244,63 @@ export function Sampling({ auditId, evidence, samples }: Props) {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-[220px] flex-1">
                     <p className="text-sm font-medium break-all">{f.file_name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{areaLabel}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      {f.area_code ? (
+                        <span className="text-xs text-muted-foreground">{areaLabel}</span>
+                      ) : (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                          ⚠ Unclassified — assign an area below so it is audited
+                        </span>
+                      )}
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                          EXTRACT_STYLE[f.extract_status] ?? 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {extractLabel(f)}
+                      </span>
+                      <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                        scannable evidence
+                      </span>
+                      {f.audit_id === auditId ? (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                          this audit
+                        </span>
+                      ) : f.audit_id ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          linked to another audit
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                          unlinked
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="w-44">
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                    {!f.area_code ? (
+                      <Select
+                        value=""
+                        onChange={(e) => assignArea(f, e.target.value)}
+                        aria-label={`Assign compliance area for ${f.file_name}`}
+                        className="h-8 w-44 text-xs"
+                      >
+                        <option value="" disabled>
+                          Assign area…
+                        </option>
+                        {Object.entries(AREA_NAME).map(([code, name]) => (
+                          <option key={code} value={code}>
+                            {code} {name}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : null}
                     <Select
                       value={draft.type}
                       onChange={(e) => setDraft(f, { type: e.target.value })}
                       aria-label={`Sample type for ${f.file_name}`}
-                      className="h-8 text-xs"
+                      className="h-8 w-44 text-xs"
                     >
                       {SAMPLE_TYPES.map((t) => (
                         <option key={t} value={t}>
