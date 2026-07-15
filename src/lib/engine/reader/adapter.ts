@@ -236,6 +236,22 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
     if (ref && !byRef.has(ref)) byRef.set(ref, a);
   }
 
+  // Index the STRONGEST document per CQC area — regardless of whether it maps
+  // to a library reference. This is what lets the engine assess a client's OWN
+  // policies (not just BizCompliance templates) against the CQC signal
+  // rulebook: a real safeguarding policy that fires area-02 signals can satisfy
+  // area-02 checklist items even though it carries no "SG-01" reference.
+  const signalStrength = (a: (typeof analyzed)[number]) =>
+    a.result.signals.filter((s) => s.found).length;
+  const byArea = new Map<string, (typeof analyzed)[number]>();
+  for (const a of analyzed) {
+    if (!a.result.readable) continue;
+    const area = a.result.classification.area;
+    if (!area) continue;
+    const current = byArea.get(area);
+    if (!current || signalStrength(a) > signalStrength(current)) byArea.set(area, a);
+  }
+
   const stats: AutopilotStats = {
     evidenceScanned: evRows.length,
     itemsMatched: 0,
@@ -252,19 +268,34 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
       stats.itemsAlreadyDecided++;
       continue;
     }
-    const match = byRef.get(item.ref);
+    // Prefer an exact library-reference match; otherwise fall back to the
+    // strongest client policy classified to this item's AREA that actually
+    // fires CQC signals — so the client's own documents get assessed too.
+    const refMatch = byRef.get(item.ref);
+    const areaMatch = refMatch
+      ? null
+      : (() => {
+          const cand = byArea.get(item.area_code);
+          return cand && cand.result.signals.some((s) => s.found) ? cand : null;
+        })();
+    const match = refMatch ?? areaMatch;
     if (match) {
       stats.itemsMatched++;
       const s = deriveReaderSuggestion(match.result, match.evidenceId);
       if (s.status === 'out_of_date') stats.itemsOutOfDate++;
       if (s.status === 'missing') stats.itemsTemplateFlagged++;
+      // When matched by area (not an exact library doc), lower the confidence
+      // and say so — the founder should eyeball these before accepting.
+      const byAreaOnly = !refMatch && Boolean(areaMatch);
       updates.push({
         id: item.id,
         patch: {
           suggested_status: s.status,
           suggested_evidence_id: s.evidenceId,
-          suggestion_confidence: s.confidence,
-          suggestion_reason: s.reason,
+          suggestion_confidence: byAreaOnly ? Math.min(s.confidence, 0.6) : s.confidence,
+          suggestion_reason: byAreaOnly
+            ? `Assessed against your own document "${match.fileName}" (matched by compliance area, not a library template). ${s.reason}`
+            : s.reason,
         },
       });
     } else if (item.requirement === 'legal' || item.requirement === 'cqc') {
