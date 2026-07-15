@@ -9,6 +9,7 @@ import { Checklist } from './checklist';
 import { SafSheet } from './saf-sheet';
 import { Findings } from './findings';
 import { Sampling } from './sampling';
+import { EvidencePanel } from './evidence-panel';
 import { ReportTab } from './report-tab';
 import { setAuditStatus } from '@/lib/actions/admin';
 import { AUDIT_STATUS_LABELS } from '@/lib/audit/scoring';
@@ -136,6 +137,9 @@ export function Workbench(props: Props) {
           <TabsTrigger value="findings" active={tab === 'findings'} onClick={() => setTab('findings')}>
             Findings ({props.findings.filter((f) => f.status === 'open').length})
           </TabsTrigger>
+          <TabsTrigger value="evidence" active={tab === 'evidence'} onClick={() => setTab('evidence')}>
+            Evidence proof
+          </TabsTrigger>
           <TabsTrigger value="sampling" active={tab === 'sampling'} onClick={() => setTab('sampling')}>
             Submitted files ({props.evidence.length})
           </TabsTrigger>
@@ -160,6 +164,9 @@ export function Workbench(props: Props) {
             libraryAreas={props.libraryAreas}
             auditId={props.audit.id}
           />
+        </TabsContent>
+        <TabsContent value="evidence" activeValue={tab} className="mt-5">
+          <EvidencePanel auditId={props.audit.id} />
         </TabsContent>
         <TabsContent value="sampling" activeValue={tab} className="mt-5">
           <Sampling

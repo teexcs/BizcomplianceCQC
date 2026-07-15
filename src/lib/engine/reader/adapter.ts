@@ -593,6 +593,214 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
   return { areas, totalProven, totalCriticalProven, totalCritical };
 }
 
+/* ---------- Execution proof: is the policy actually being DONE? ---------- */
+
+/**
+ * A record document proves execution when it contains dated, named, or logged
+ * entries — the fingerprints of a real record (a training matrix with dates, a
+ * MAR chart with initials, an incident log with entries) rather than a policy
+ * that merely describes what should happen.
+ */
+// Execution markers = the fingerprints of a FILLED-IN record, not prose. These
+// are deliberately concrete (real dates, signatures, tabular data) so a policy
+// that merely uses words like "record" or "log" is NOT mistaken for a record.
+const EXECUTION_MARKERS: { id: string; label: string; re: RegExp }[] = [
+  { id: 'date', label: 'dated entries', re: /\b(\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})\b/i },
+  { id: 'signature', label: 'signatures / initials', re: /\b(signed(?:\s+by)?|signature|print name|staff name|completed by|reviewed by)\b/i },
+  { id: 'tabular', label: 'tabular data (dates + expiry/completed columns)', re: /\b(expiry|renewal\s*date|date\s*(reported|completed|due)|completion\s*date)\b/i },
+];
+
+// Filename words that strongly indicate a filled-in record artefact.
+const RECORD_NAME_HINT =
+  /\b(matrix|register|log\b|chart|mar\b|rota|certificate|audit|checklist|tracker|record\s|records\s|spreadsheet|form\b)\b/i;
+
+/**
+ * Is this file a filled-in RECORD (execution evidence) vs a POLICY document?
+ * Requires real execution fingerprints — a record-type filename PLUS at least
+ * one concrete marker, or two concrete markers on their own. Prose words like
+ * "recorded"/"logged" alone are NOT enough (they belong in policies).
+ */
+function isRecordDocument(fileName: string, text: string): { isRecord: boolean; markers: string[] } {
+  const nameHint = RECORD_NAME_HINT.test(fileName);
+  const markers: string[] = [];
+  for (const m of EXECUTION_MARKERS) {
+    if (m.re.test(text)) markers.push(m.label);
+  }
+  // A record if: named like one AND shows ≥1 concrete marker, or ≥2 markers.
+  const isRecord = (nameHint && markers.length >= 1) || markers.length >= 2;
+  return { isRecord, markers };
+}
+
+export interface ExecutionClaim {
+  /** The policy claim (a met signal in the policy doc). */
+  claim: string;
+  weight: 'critical' | 'expected';
+  /** The policy line that makes the claim. */
+  policyFile: string;
+  policyLine: number;
+  policyQuote: string;
+  /** 'confirmed' when a supporting record exists in the area; else 'not_evidenced'. */
+  state: 'confirmed' | 'not_evidenced';
+  /** Quoted execution evidence from the record, when confirmed. */
+  evidence: { fileName: string; line: number; quote: string; markers: string[] } | null;
+}
+
+export interface AreaExecution {
+  areaCode: string;
+  areaName: string;
+  claims: ExecutionClaim[];
+  confirmed: number;
+  total: number;
+  /** Record documents found in this area (the execution evidence sources). */
+  recordFiles: string[];
+}
+
+export interface ExecutionProof {
+  areas: AreaExecution[];
+  totalConfirmed: number;
+  totalClaims: number;
+}
+
+/**
+ * EXECUTION PROOF — the "is the policy actually being DONE?" surface.
+ *
+ * For each area: take the claims a POLICY document makes (its met signals) and
+ * check whether a RECORD document in the same area shows those claims are lived
+ * — quoting the dated/signed/logged line that proves it. Where no supporting
+ * record exists, the claim is reported as "claimed, not evidenced in practice".
+ *
+ * This is deliberately conservative and quote-backed: it never asserts a policy
+ * is executed without pointing at a real record line. It complements — does not
+ * replace — the auditor's own file sampling.
+ */
+export async function getExecutionProof(orgId: string): Promise<ExecutionProof> {
+  const admin = createAdminClient();
+  const { data: evidence } = await admin
+    .from('evidence_files')
+    .select('id, file_name, area_code, extract_status, extracted_text, scan_status, lifecycle_state')
+    .eq('org_id', orgId);
+  const rows = (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
+
+  // Split each area's docs into policies (claims) and records (execution proof).
+  interface AreaDocs {
+    policies: { fileName: string; analysis: AnalyzedDoc }[];
+    records: { fileName: string; text: string; markers: string[] }[];
+  }
+  const byArea = new Map<string, AreaDocs>();
+
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) continue;
+    const cls = classify(doc);
+    const area = e.area_code ?? cls.area;
+    if (!area) continue;
+    const text = doc.lines.join('\n');
+    const { isRecord, markers } = isRecordDocument(e.file_name, text);
+
+    let bucket = byArea.get(area);
+    if (!bucket) {
+      bucket = { policies: [], records: [] };
+      byArea.set(area, bucket);
+    }
+    if (isRecord) {
+      bucket.records.push({ fileName: e.file_name, text, markers });
+    } else {
+      bucket.policies.push({ fileName: e.file_name, analysis: analyzeDocument(doc, cls) });
+    }
+  }
+
+  const areas: AreaExecution[] = [];
+  let totalConfirmed = 0;
+  let totalClaims = 0;
+
+  for (const [areaCode, docs] of [...byArea.entries()].sort()) {
+    const claims: ExecutionClaim[] = [];
+    // Each met signal in each policy doc is a claim to be executed.
+    for (const pol of docs.policies) {
+      for (const s of pol.analysis.signals) {
+        if (!s.found || s.citations.length === 0) continue;
+        const c = s.citations[0];
+        // Look for supporting execution evidence: a record in the same area
+        // whose text mentions the claim's subject AND shows execution markers.
+        const evidence = findExecutionEvidence(s.label, docs.records);
+        claims.push({
+          claim: s.label,
+          weight: s.weight,
+          policyFile: pol.fileName,
+          policyLine: c.line,
+          policyQuote: c.quote,
+          state: evidence ? 'confirmed' : 'not_evidenced',
+          evidence,
+        });
+      }
+    }
+    const confirmed = claims.filter((c) => c.state === 'confirmed').length;
+    totalConfirmed += confirmed;
+    totalClaims += claims.length;
+    areas.push({
+      areaCode,
+      areaName: AREAS_MAP[areaCode] ?? `Area ${areaCode}`,
+      claims,
+      confirmed,
+      total: claims.length,
+      recordFiles: docs.records.map((r) => r.fileName),
+    });
+  }
+
+  return { areas, totalConfirmed, totalClaims };
+}
+
+/** Keywords lifted from a signal label, for matching against record text. */
+function claimKeywords(label: string): string[] {
+  return label
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+}
+const STOPWORDS = new Set([
+  'referenced', 'process', 'requirement', 'required', 'defined', 'stated', 'route',
+  'available', 'addressed', 'controls', 'where', 'incl', 'e.g', 'their', 'related',
+  'recording', 'record', 'records', 'with', 'that', 'this', 'from', 'into', 'must',
+]);
+
+/**
+ * Find a record line that both mentions the claim's subject and shows an
+ * execution marker (a date, signature, logged entry). Returns the quoted proof,
+ * or null when no such line exists (→ claimed but not evidenced in practice).
+ */
+function findExecutionEvidence(
+  claimLabel: string,
+  records: { fileName: string; text: string; markers: string[] }[],
+): { fileName: string; line: number; quote: string; markers: string[] } | null {
+  const keys = claimKeywords(claimLabel);
+  if (keys.length === 0) return null;
+
+  for (const rec of records) {
+    const lines = rec.text.replace(/\r\n?/g, '\n').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      if (!raw.trim()) continue;
+      const line = raw.toLowerCase();
+      const mentionsClaim = keys.some((k) => line.includes(k));
+      if (!mentionsClaim) continue;
+      const marker = EXECUTION_MARKERS.find((m) => m.re.test(raw));
+      if (marker) {
+        const q = raw.replace(/\s+/g, ' ').trim();
+        return {
+          fileName: rec.fileName,
+          line: i + 1,
+          quote: q.length > 220 ? `${q.slice(0, 220)}…` : q,
+          markers: rec.markers,
+        };
+      }
+    }
+  }
+  // No line matched claim + marker together, but if a record in the area exists
+  // at all and shows strong execution markers, treat it as weak corroboration.
+  return null;
+}
+
 /** Minimal evidence signal shape shared with live-score-core.ts's EvidenceSignal. */
 export interface ReaderSignal {
   reviewDate: string | null;

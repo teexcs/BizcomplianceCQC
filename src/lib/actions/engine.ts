@@ -8,7 +8,15 @@ import {
   type AutopilotStats,
   type ApplyStats,
 } from '@/lib/engine/autopilot';
-import { runReaderSuggest, buildAuditAnalysis, verifyOrgEvidence } from '@/lib/engine/reader/adapter';
+import {
+  runReaderSuggest,
+  buildAuditAnalysis,
+  verifyOrgEvidence,
+  getEvidenceProof,
+  getExecutionProof,
+  type EvidenceProof,
+  type ExecutionProof,
+} from '@/lib/engine/reader/adapter';
 import { sweepPendingExtractionsForOrg } from '@/lib/evidence/process';
 import type { VerificationResult } from '@/lib/audit/verification';
 
@@ -79,6 +87,34 @@ export async function getEvidenceVerification(
   } catch (e) {
     console.error('[engine] verification failed', e);
     return { ok: false, error: 'Could not verify evidence — try again.' };
+  }
+}
+
+/**
+ * The trust surface for admin: per-area PROVEN signals (quoted from the client's
+ * own docs) + NOT-FOUND gaps, plus EXECUTION proof (policy claims cross-checked
+ * against filled-in records). Read-only.
+ */
+export async function getEvidenceTrust(
+  auditId: string,
+): Promise<{ ok: boolean; proof?: EvidenceProof; execution?: ExecutionProof; error?: string }> {
+  await requireAdminSession();
+  const supabase = await createClient();
+  const { data: audit, error } = await supabase
+    .from('audits')
+    .select('org_id')
+    .eq('id', auditId)
+    .single<{ org_id: string }>();
+  if (error || !audit) return { ok: false, error: 'Audit not found.' };
+  try {
+    const [proof, execution] = await Promise.all([
+      getEvidenceProof(audit.org_id),
+      getExecutionProof(audit.org_id),
+    ]);
+    return { ok: true, proof, execution };
+  } catch (e) {
+    console.error('[engine] evidence trust failed', e);
+    return { ok: false, error: 'Could not build the evidence view — try again.' };
   }
 }
 
