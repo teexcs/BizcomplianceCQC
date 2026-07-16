@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { ShieldCheck, Quote, XCircle, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
-import { getEvidenceTrust } from '@/lib/actions/engine';
+import { getEvidenceTrust, getAuditDiff, type AuditDiff } from '@/lib/actions/engine';
+import { buildBenchmark, VERDICT_LABEL } from '@/lib/audit/benchmark';
 import type { EvidenceProof, ExecutionProof, Contradiction } from '@/lib/engine/reader/adapter';
 
 /**
@@ -19,11 +20,12 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
   const [proof, setProof] = useState<EvidenceProof | null>(null);
   const [execution, setExecution] = useState<ExecutionProof | null>(null);
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  const [diff, setDiff] = useState<AuditDiff | null>(null);
 
   function load() {
     setError(null);
     start(async () => {
-      const res = await getEvidenceTrust(auditId);
+      const [res, diffRes] = await Promise.all([getEvidenceTrust(auditId), getAuditDiff(auditId)]);
       if (!res.ok) {
         setError(res.error ?? 'Could not load the evidence view.');
         return;
@@ -31,8 +33,19 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
       setProof(res.proof ?? null);
       setExecution(res.execution ?? null);
       setContradictions(res.contradictions ?? []);
+      setDiff(diffRes.ok ? diffRes.diff ?? null : null);
     });
   }
+
+  const benchmark = proof
+    ? buildBenchmark(
+        proof.areas.map((a) => ({
+          areaCode: a.areaCode,
+          criticalProven: a.criticalProven,
+          criticalTotal: a.criticalTotal,
+        })),
+      )
+    : null;
 
   const execByArea = new Map((execution?.areas ?? []).map((a) => [a.areaCode, a]));
 
@@ -70,6 +83,59 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
             value={execution ? `${execution.totalConfirmed}/${execution.totalClaims}` : '—'}
           />
         </div>
+      ) : null}
+
+      {diff?.hasPrevious ? (
+        <section className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-sm font-medium">
+            Since the last audit
+            {diff.scoreDelta != null ? (
+              <span className={diff.scoreDelta >= 0 ? 'text-green-400' : 'text-red-400'}>
+                {' '}· score {diff.scoreDelta >= 0 ? '+' : ''}
+                {diff.scoreDelta} ({diff.previousScore} → {diff.currentScore})
+              </span>
+            ) : null}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {diff.closed.length} gap{diff.closed.length === 1 ? '' : 's'} closed · {diff.regressed.length}{' '}
+            regressed · {diff.newGaps.length} new gap{diff.newGaps.length === 1 ? '' : 's'}
+          </p>
+          {diff.regressed.length > 0 ? (
+            <p className="mt-1 text-[11px] text-amber-400">
+              Regressed: {diff.regressed.slice(0, 4).map((r) => r.title).join(', ')}
+              {diff.regressed.length > 4 ? '…' : ''}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {benchmark && benchmark.areas.length > 0 ? (
+        <section className="rounded-xl border border-border bg-card px-4 py-3">
+          <p className="text-sm font-medium">
+            Benchmark — {benchmark.aboveCount} area{benchmark.aboveCount === 1 ? '' : 's'} above a typical
+            provider, {benchmark.belowCount} below
+          </p>
+          <div className="mt-2 grid gap-1 sm:grid-cols-2">
+            {benchmark.areas.map((a) => (
+              <div key={a.areaCode} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-muted-foreground">
+                  {a.areaCode} {a.areaName}
+                </span>
+                <span
+                  className={
+                    a.verdict === 'above'
+                      ? 'text-green-400'
+                      : a.verdict === 'below'
+                        ? 'text-red-400'
+                        : 'text-muted-foreground'
+                  }
+                >
+                  {Math.round(a.coverage * 100)}% · {VERDICT_LABEL[a.verdict]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {contradictions.length > 0 ? (

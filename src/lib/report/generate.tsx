@@ -11,6 +11,7 @@ import type {
 } from '@/types/database';
 import {
   FINDING_PRIORITY_LABELS,
+  explainScore,
   type SafDomainScore,
   type ScoreBreakdown,
 } from '@/lib/audit/scoring';
@@ -286,13 +287,24 @@ function ReportDoc({ data }: { data: ReportData }) {
         ) : null}
 
         {breakdown ? (
-          <Text style={{ fontSize: 9, color: COLORS.muted, marginBottom: 14 }}>
-            Score composition: documents &amp; evidence {Math.round(breakdown.doc.scored * 100)}/100
-            ({Math.round(breakdown.docShare * 100)}% weight) · SAF inspection interview{' '}
-            {breakdown.saf.answered > 0 ? `${Math.round(breakdown.saf.scored * 100)}/100` : 'not assessed'}{' '}
-            ({Math.round(breakdown.safShare * 100)}% weight). Legally-required items weigh ×3;
-            out-of-date documents earn 25% credit; priority interview questions weigh ×3.
-          </Text>
+          (() => {
+            const ex = explainScore(breakdown);
+            return (
+              <View style={{ marginBottom: 14 }}>
+                <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: COLORS.ink, marginBottom: 3 }}>
+                  {cleanText(ex.headline)}
+                </Text>
+                <Text style={{ fontSize: 8.5, color: COLORS.muted, lineHeight: 1.5 }}>
+                  {ex.parts.map((p) => `${cleanText(p.label)}: ${cleanText(p.detail)} → ${p.points} pts`).join('  ·  ')}
+                </Text>
+                {ex.drags.length > 0 ? (
+                  <Text style={{ fontSize: 8.5, color: '#333a47', lineHeight: 1.5, marginTop: 2 }}>
+                    Holding the score back: {ex.drags.map((d) => cleanText(d)).join('; ')}.
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })()
         ) : null}
 
         {audit.summary ? (

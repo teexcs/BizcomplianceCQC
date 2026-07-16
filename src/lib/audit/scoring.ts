@@ -197,6 +197,67 @@ export function computeScoreBreakdown(
   return { score, legalWarning, doc, saf, docShare, safShare };
 }
 
+export interface ScoreExplanation {
+  /** One-line headline you can say on a call. */
+  headline: string;
+  /** The maths, spelled out: contribution of each half to the final number. */
+  parts: { label: string; detail: string; points: number }[];
+  /** The specific things dragging the score down, most material first. */
+  drags: string[];
+}
+
+/**
+ * Turn a ScoreBreakdown into a defensible, plain-English explanation — the
+ * "why is it 82?" you can stand behind in front of a client. Pure: derived only
+ * from the breakdown, so the explanation can never disagree with the number.
+ */
+export function explainScore(b: ScoreBreakdown): ScoreExplanation {
+  const docPoints = Math.round(b.docShare * b.doc.scored * 100);
+  const safPoints = Math.round(b.safShare * b.saf.scored * 100);
+
+  const parts: { label: string; detail: string; points: number }[] = [
+    {
+      label: 'Documents & evidence',
+      detail: `${Math.round(b.doc.scored * 100)}/100 on the evidence base, weighted ${Math.round(b.docShare * 100)}%`,
+      points: docPoints,
+    },
+  ];
+  if (b.safShare > 0 && b.saf.answered > 0) {
+    parts.push({
+      label: 'SAF interview',
+      detail: `${Math.round(b.saf.scored * 100)}/100 across the five key questions, weighted ${Math.round(b.safShare * 100)}%`,
+      points: safPoints,
+    });
+  }
+
+  const drags: string[] = [];
+  if (b.doc.legalMissing > 0) {
+    drags.push(
+      `${b.doc.legalMissing} legally-required document${b.doc.legalMissing === 1 ? '' : 's'} missing or out of date (each weighted ×3, so these hurt most)`,
+    );
+  }
+  if (b.doc.missing > b.doc.legalMissing) {
+    drags.push(`${b.doc.missing - b.doc.legalMissing} other expected document${b.doc.missing - b.doc.legalMissing === 1 ? '' : 's'} not evidenced`);
+  }
+  if (b.doc.outOfDate > 0) {
+    drags.push(`${b.doc.outOfDate} document${b.doc.outOfDate === 1 ? '' : 's'} past review (counts at 25%)`);
+  }
+  if (b.saf.priorityFails > 0) {
+    drags.push(`${b.saf.priorityFails} priority interview question${b.saf.priorityFails === 1 ? '' : 's'} answered "no" (weighted ×3)`);
+  }
+
+  const headline =
+    b.score >= 85
+      ? `${b.score}/100 — inspection-ready, with minor tidy-ups.`
+      : b.score >= 70
+        ? `${b.score}/100 — broadly ready; a focused action plan closes the gap.`
+        : b.score >= 50
+          ? `${b.score}/100 — meaningful gaps to address before an inspection.`
+          : `${b.score}/100 — significant work needed; treat the fix-first items as urgent.`;
+
+  return { headline, parts, drags };
+}
+
 /** Overall readiness score, 0–100 (the headline number from the breakdown). */
 export function computeReadinessScore(
   items: Pick<AuditItem, 'requirement' | 'status'>[],
