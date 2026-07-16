@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server';
 import type { AuditItem, ItemStatus } from '@/types/database';
 import type { AutopilotStats } from '@/lib/engine/autopilot';
 import { verifyEvidence, type VerifiableFile, type VerificationResult } from '@/lib/audit/verification';
+import { gradeSignal, type SignalConfidence } from '@/lib/audit/signal-confidence';
 // Verbatim copy of the standalone policy-evidence-reader engine. These modules
 // are byte-identical to ~/Downloads/policy-evidence-reader and must not be
 // edited here — treat them as a vendored, tested dependency. Typed via the
@@ -486,6 +487,8 @@ export interface ProvenSignal {
   weight: 'critical' | 'expected';
   /** The verbatim line(s) from the client's own document that prove it. */
   citations: { fileName: string; line: number; quote: string }[];
+  /** Graded strength of the evidence + a plain-English "why". */
+  confidence: SignalConfidence;
 }
 
 export interface AreaProof {
@@ -530,7 +533,7 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
   // Analyse each readable doc; group the proven signals by the area the doc
   // belongs to (stored area first, else the reader's classification).
   interface Agg {
-    proven: Map<string, ProvenSignal>;
+    proven: Map<string, Omit<ProvenSignal, 'confidence'>>;
     notFound: Map<string, { label: string; weight: 'critical' | 'expected' }>;
     files: Set<string>;
   }
@@ -554,8 +557,12 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
       if (s.found && s.citations.length > 0) {
         agg.files.add(e.file_name);
         const existing = agg.proven.get(s.label) ?? { label: s.label, weight: s.weight, citations: [] };
-        for (const c of s.citations.slice(0, 2)) {
-          existing.citations.push({ fileName: e.file_name, line: c.line, quote: c.quote });
+        // Keep up to 4 citations so confidence can see corroboration across
+        // multiple lines/documents (display still shows the first 1–2).
+        for (const c of s.citations.slice(0, 4)) {
+          if (existing.citations.length < 6) {
+            existing.citations.push({ fileName: e.file_name, line: c.line, quote: c.quote });
+          }
         }
         agg.proven.set(s.label, existing);
         // If it was previously only in notFound (from another doc), it's proven now.
@@ -572,7 +579,10 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
   let totalCritical = 0;
 
   for (const [areaCode, agg] of [...byArea.entries()].sort()) {
-    const proven = [...agg.proven.values()];
+    const proven: ProvenSignal[] = [...agg.proven.values()].map((p) => ({
+      ...p,
+      confidence: gradeSignal(p.citations),
+    }));
     const notFound = [...agg.notFound.values()];
     const criticalProven = proven.filter((p) => p.weight === 'critical').length;
     const criticalTotal = criticalProven + notFound.filter((n) => n.weight === 'critical').length;
@@ -591,6 +601,101 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
   }
 
   return { areas, totalProven, totalCriticalProven, totalCritical };
+}
+
+/* ---------- Cross-document contradiction detection ---------- */
+
+export interface Contradiction {
+  /** The subject the documents disagree on (e.g. "supervision", "medicines review"). */
+  topic: string;
+  /** The conflicting statements, each quoted with its source. */
+  statements: { fileName: string; line: number; quote: string; value: string }[];
+}
+
+// Cadence words ranked so we can tell that two documents state different
+// frequencies for the same subject.
+const CADENCE_RE =
+  /\b(daily|weekly|fortnightly|monthly|bi-?monthly|quarterly|six-?monthly|half-?yearly|annually|yearly|every\s+\d+\s+(days?|weeks?|months?|years?))\b/i;
+
+// Subjects worth checking for conflicting cadences — the ones inspectors probe.
+const CADENCE_SUBJECTS: { topic: string; re: RegExp }[] = [
+  { topic: 'supervision', re: /supervision/i },
+  { topic: 'appraisal', re: /appraisal/i },
+  { topic: 'medicines review / audit', re: /medicin(e|es)\s+(review|audit)|mar\s+audit/i },
+  { topic: 'risk assessment review', re: /risk assessment.{0,20}review|review.{0,20}risk assessment/i },
+  { topic: 'care plan review', re: /care plan.{0,20}review|review.{0,20}care plan/i },
+  { topic: 'policy review cycle', re: /polic(y|ies).{0,20}review|review.{0,20}polic/i },
+  { topic: 'fire drill / safety check', re: /fire (drill|safety)|safety check/i },
+  { topic: 'training refresh', re: /training.{0,20}(refresh|renew|update)|annual training/i },
+];
+
+function normaliseCadence(raw: string): string {
+  const c = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (/half-?yearly/.test(c)) return 'six-monthly';
+  if (/yearly/.test(c)) return 'annually';
+  return c;
+}
+
+/**
+ * Detect where two of the org's documents state DIFFERENT frequencies for the
+ * same subject (e.g. supervision "monthly" in one policy, "quarterly" in
+ * another). Inspectors seize on internal inconsistency — surfacing it is an
+ * advanced audit capability. Every reported contradiction is quote-backed from
+ * both documents; nothing is inferred.
+ */
+export async function detectContradictions(orgId: string): Promise<Contradiction[]> {
+  const admin = createAdminClient();
+  const { data: evidence } = await admin
+    .from('evidence_files')
+    .select('id, file_name, extract_status, extracted_text, scan_status, lifecycle_state')
+    .eq('org_id', orgId);
+  const rows = (evidence as EvidenceRow[]) ?? [];
+
+  // Gather, per subject, every (file, line, cadence value) seen.
+  const bySubject = new Map<string, { fileName: string; line: number; quote: string; value: string }[]>();
+
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) continue;
+    for (let i = 0; i < doc.lines.length; i++) {
+      const line = doc.lines[i];
+      if (!line.trim()) continue;
+      const cadenceMatch = line.match(CADENCE_RE);
+      if (!cadenceMatch) continue;
+      for (const subj of CADENCE_SUBJECTS) {
+        if (!subj.re.test(line)) continue;
+        const q = line.replace(/\s+/g, ' ').trim();
+        const entry = {
+          fileName: e.file_name,
+          line: i + 1,
+          quote: q.length > 200 ? `${q.slice(0, 200)}…` : q,
+          value: normaliseCadence(cadenceMatch[0]),
+        };
+        const list = bySubject.get(subj.topic) ?? [];
+        list.push(entry);
+        bySubject.set(subj.topic, list);
+      }
+    }
+  }
+
+  const contradictions: Contradiction[] = [];
+  for (const [topic, entries] of bySubject) {
+    // A contradiction requires ≥2 DISTINCT cadence values from ≥2 DIFFERENT files.
+    const distinctValues = new Set(entries.map((x) => x.value));
+    const distinctFiles = new Set(entries.map((x) => x.fileName));
+    if (distinctValues.size >= 2 && distinctFiles.size >= 2) {
+      // Keep one representative statement per distinct value.
+      const seen = new Set<string>();
+      const statements = entries.filter((x) => {
+        const key = `${x.value}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      contradictions.push({ topic, statements });
+    }
+  }
+  return contradictions;
 }
 
 /* ---------- Execution proof: is the policy actually being DONE? ---------- */

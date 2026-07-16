@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { ShieldCheck, Quote, XCircle, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
 import { getEvidenceTrust } from '@/lib/actions/engine';
-import type { EvidenceProof, ExecutionProof } from '@/lib/engine/reader/adapter';
+import type { EvidenceProof, ExecutionProof, Contradiction } from '@/lib/engine/reader/adapter';
 
 /**
  * Evidence & execution — the founder's trust surface. Shows, per CQC area:
@@ -18,6 +18,7 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [proof, setProof] = useState<EvidenceProof | null>(null);
   const [execution, setExecution] = useState<ExecutionProof | null>(null);
+  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
 
   function load() {
     setError(null);
@@ -29,6 +30,7 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
       }
       setProof(res.proof ?? null);
       setExecution(res.execution ?? null);
+      setContradictions(res.contradictions ?? []);
     });
   }
 
@@ -70,6 +72,33 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
         </div>
       ) : null}
 
+      {contradictions.length > 0 ? (
+        <section className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-[hsl(4,70%,55%)]">
+            <AlertTriangle size={15} aria-hidden="true" /> Internal inconsistencies ({contradictions.length})
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Different documents state different frequencies for the same thing — inspectors probe
+            this. Reconcile before delivery.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {contradictions.map((c) => (
+              <li key={c.topic} className="rounded-lg bg-card px-3 py-2">
+                <p className="text-xs font-medium capitalize">{c.topic}</p>
+                {c.statements.map((s, i) => (
+                  <p key={i} className="mt-0.5 pl-3 text-[11px] leading-relaxed text-muted-foreground">
+                    <span className="font-semibold text-foreground">{s.value}</span> — &ldquo;{s.quote}&rdquo;{' '}
+                    <span className="text-muted-foreground/70">
+                      ({s.fileName}, line {s.line})
+                    </span>
+                  </p>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {proof
         ? proof.areas.map((area) => {
             const exec = execByArea.get(area.areaCode);
@@ -91,7 +120,7 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
                     <div className="space-y-2">
                       {area.proven.map((p) => (
                         <div key={p.label} className="rounded-lg bg-green-500/5 px-3 py-2">
-                          <p className="flex items-center gap-1.5 text-xs font-medium text-green-300">
+                          <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-green-300">
                             <CheckCircle2 size={13} aria-hidden="true" />
                             {p.label}
                             {p.weight === 'critical' ? (
@@ -99,6 +128,19 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
                                 critical
                               </span>
                             ) : null}
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+                                p.confidence.level === 'strong'
+                                  ? 'bg-green-500/15 text-green-300'
+                                  : p.confidence.level === 'moderate'
+                                    ? 'bg-amber-500/15 text-amber-300'
+                                    : 'bg-red-500/15 text-red-300'
+                              }`}
+                              title={p.confidence.reason}
+                            >
+                              {p.confidence.level} · {p.confidence.matchCount} match
+                              {p.confidence.matchCount === 1 ? '' : 'es'}
+                            </span>
                           </p>
                           {p.citations.slice(0, 2).map((c, i) => (
                             <p key={i} className="mt-1 pl-4 text-[11px] leading-relaxed text-muted-foreground">

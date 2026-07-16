@@ -14,8 +14,10 @@ import {
   verifyOrgEvidence,
   getEvidenceProof,
   getExecutionProof,
+  detectContradictions,
   type EvidenceProof,
   type ExecutionProof,
+  type Contradiction,
 } from '@/lib/engine/reader/adapter';
 import { sweepPendingExtractionsForOrg } from '@/lib/evidence/process';
 import type { VerificationResult } from '@/lib/audit/verification';
@@ -95,9 +97,13 @@ export async function getEvidenceVerification(
  * own docs) + NOT-FOUND gaps, plus EXECUTION proof (policy claims cross-checked
  * against filled-in records). Read-only.
  */
-export async function getEvidenceTrust(
-  auditId: string,
-): Promise<{ ok: boolean; proof?: EvidenceProof; execution?: ExecutionProof; error?: string }> {
+export async function getEvidenceTrust(auditId: string): Promise<{
+  ok: boolean;
+  proof?: EvidenceProof;
+  execution?: ExecutionProof;
+  contradictions?: Contradiction[];
+  error?: string;
+}> {
   await requireAdminSession();
   const supabase = await createClient();
   const { data: audit, error } = await supabase
@@ -107,11 +113,12 @@ export async function getEvidenceTrust(
     .single<{ org_id: string }>();
   if (error || !audit) return { ok: false, error: 'Audit not found.' };
   try {
-    const [proof, execution] = await Promise.all([
+    const [proof, execution, contradictions] = await Promise.all([
       getEvidenceProof(audit.org_id),
       getExecutionProof(audit.org_id),
+      detectContradictions(audit.org_id),
     ]);
-    return { ok: true, proof, execution };
+    return { ok: true, proof, execution, contradictions };
   } catch (e) {
     console.error('[engine] evidence trust failed', e);
     return { ok: false, error: 'Could not build the evidence view — try again.' };
