@@ -31,8 +31,15 @@ export interface EngineActionResult {
   apply?: ApplyStats;
 }
 
-/** Scan the vault and write suggestions onto every undecided checklist item. */
-export async function engineSuggest(auditId: string): Promise<EngineActionResult> {
+/**
+ * Scan the vault and write suggestions onto checklist items.
+ * `rescan` clears prior decisions first so EVERY item is re-read against the
+ * current evidence — the "read all my documents again" button.
+ */
+export async function engineSuggest(
+  auditId: string,
+  rescan = false,
+): Promise<EngineActionResult> {
   await requireAdminSession();
   try {
     const supabase = await createClient();
@@ -42,8 +49,9 @@ export async function engineSuggest(auditId: string): Promise<EngineActionResult
       .eq('id', auditId)
       .single<{ org_id: string }>();
     if (!audit) return { ok: false, error: 'Audit not found.' };
+    // Make sure any freshly-uploaded file is extracted before we read it.
     await sweepPendingExtractionsForOrg(audit.org_id);
-    const suggest = await runReaderSuggest(auditId);
+    const suggest = await runReaderSuggest(auditId, { rescan });
     revalidatePath(`/admin/audits/${auditId}`);
     return { ok: true, suggest };
   } catch (e) {

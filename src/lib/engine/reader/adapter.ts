@@ -262,7 +262,10 @@ function deriveReaderSuggestion(
  * Drop-in replacement for runAutopilotSuggest: same stats shape, same columns,
  * so the existing apply → RAG → findings → score pipeline runs unchanged.
  */
-export async function runReaderSuggest(auditId: string): Promise<AutopilotStats> {
+export async function runReaderSuggest(
+  auditId: string,
+  opts: { rescan?: boolean } = {},
+): Promise<AutopilotStats> {
   const started = Date.now();
   const admin = createAdminClient();
 
@@ -272,6 +275,24 @@ export async function runReaderSuggest(auditId: string): Promise<AutopilotStats>
     .eq('id', auditId)
     .single<{ id: string; org_id: string }>();
   if (!audit) throw new Error('Audit not found');
+
+  // Fresh scan: clear prior decisions/suggestions so every item is re-read
+  // against the current evidence. Without this, a previously-decided audit
+  // (e.g. one already delivered) would leave 'Run engine' with almost nothing
+  // to do — which reads as "it isn't scanning my documents".
+  if (opts.rescan) {
+    await admin
+      .from('audit_items')
+      .update({
+        status: 'unset',
+        evidence_id: null,
+        suggested_status: 'unset',
+        suggested_evidence_id: null,
+        suggestion_confidence: null,
+        suggestion_reason: null,
+      })
+      .eq('audit_id', auditId);
+  }
 
   const [{ data: items }, { data: evidence }] = await Promise.all([
     admin.from('audit_items').select('*').eq('audit_id', auditId),

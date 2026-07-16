@@ -152,11 +152,11 @@ export function Sampling({ auditId, evidence, samples }: Props) {
     });
   }
 
-  function runScan() {
+  function runScan(rescan = false) {
     setError(null);
     setScanMessage(null);
     startTransition(async () => {
-      const result = await engineSuggest(auditId);
+      const result = await engineSuggest(auditId, rescan);
       if (!result.ok || !result.suggest) {
         setError(result.error ?? 'Could not scan the submitted files.');
         return;
@@ -201,10 +201,22 @@ export function Sampling({ auditId, evidence, samples }: Props) {
             <button
               type="button"
               disabled={busy || files.length === 0}
-              onClick={runScan}
+              onClick={() => runScan(false)}
               className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
             >
               <ScanSearch size={14} aria-hidden="true" /> {busy ? 'Working...' : 'Run scan'}
+            </button>
+            <button
+              type="button"
+              disabled={busy || files.length === 0}
+              onClick={() => {
+                if (window.confirm('Re-read every document from scratch? This clears the current checklist decisions for this audit and re-scans all uploaded files.')) {
+                  runScan(true);
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <ScanSearch size={14} aria-hidden="true" /> Re-scan all
             </button>
             <button
               type="button"
@@ -217,9 +229,10 @@ export function Sampling({ auditId, evidence, samples }: Props) {
           </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          This is the audit evidence inbox. Run scan reads the uploaded documents and maps them to
-          the audit checklist. Use sampling below for deeper manual checks on care plans, MAR
-          charts, staff files and other records.
+          This is the audit evidence inbox. <strong>Run scan</strong> reads uploaded documents and
+          maps them to the checklist; <strong>Re-scan all</strong> clears prior decisions and reads
+          everything again (use after new uploads or on a delivered audit). Then{' '}
+          <strong>Apply</strong> to rate every area, score the audit and draft the action plan.
         </p>
         {error ? <p className="mt-2 text-xs text-red-400">{error}</p> : null}
         {scanMessage ? (
