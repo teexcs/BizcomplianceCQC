@@ -100,66 +100,6 @@ export async function submitRequest(input: z.infer<typeof requestSchema>): Promi
   return { ok: true, id: data.id };
 }
 
-const debriefSchema = z.object({
-  preferredTimes: z.string().min(5).max(500),
-  topic: z.string().max(1000).optional().or(z.literal('')),
-});
-
-/**
- * Book a debrief call — a Professional-plan benefit. Gated on the
- * complianceCall entitlement so only paying members can request one. Creates a
- * request the founder actions and emails admin. Kept simple by design: a solo
- * founder confirms the time by reply rather than running a full calendar.
- */
-export async function bookDebriefCall(
-  input: z.infer<typeof debriefSchema>,
-): Promise<ActionResult> {
-  const parsed = debriefSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Tell us when suits you (a few options helps).' };
-
-  const ctx = await requireOrgSession();
-  if (ctx.entitlements.complianceCall === 'none') {
-    return {
-      ok: false,
-      error: 'Debrief calls are part of the Professional plan. Upgrade to book a call with the team.',
-    };
-  }
-  if (!rateLimit(`debrief:${ctx.userId}`, 5, 24 * 60 * 60 * 1000)) {
-    return { ok: false, error: 'You already have call requests in — we’ll be in touch shortly.' };
-  }
-
-  const supabase = await createClient();
-  const description = `Debrief call request. Preferred times: ${parsed.data.preferredTimes}${
-    parsed.data.topic ? `\nTopic: ${parsed.data.topic}` : ''
-  }`;
-  const { data, error } = await supabase
-    .from('requests')
-    .insert({
-      org_id: ctx.org.id,
-      created_by: ctx.userId,
-      type: 'debrief_call',
-      priority: 'high',
-      description,
-    })
-    .select('id')
-    .single();
-  if (error) return { ok: false, error: 'Could not request the call. Please try again.' };
-
-  const admins = adminEmails();
-  if (admins.length) {
-    void sendEmail({
-      to: admins,
-      subject: `Debrief call request — ${ctx.org.name} (${ctx.entitlements.label})`,
-      html: `<p><strong>${ctx.org.name}</strong> requested a debrief call.</p><p>Preferred times: ${parsed.data.preferredTimes}</p>${
-        parsed.data.topic ? `<p>Topic: ${parsed.data.topic}</p>` : ''
-      }`,
-    });
-  }
-
-  revalidatePath('/dashboard/requests');
-  return { ok: true, id: data.id };
-}
-
 export async function markAlertRead(alertId: string, read: boolean): Promise<ActionResult> {
   const ctx = await requireOrgSession();
   const supabase = await createClient();

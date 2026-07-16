@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import { requireOrgSession, getRequestUsageThisMonth } from '@/lib/data/session';
 import { getRequests } from '@/lib/data/client';
 import { RequestForm } from '@/components/dashboard/request-form';
-import { DebriefCall } from '@/components/dashboard/debrief-call';
 import { formatDate } from '@/lib/utils';
 import { formatQuota } from '@/lib/plans/entitlements';
 
@@ -59,8 +58,6 @@ export default async function RequestsPage() {
           </div>
         ) : null}
       </div>
-
-      {ctx.entitlements.complianceCall !== 'none' ? <DebriefCall /> : null}
 
       {hasQuota ? (
         <Card>
