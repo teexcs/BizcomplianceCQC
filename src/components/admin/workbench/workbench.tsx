@@ -11,7 +11,7 @@ import { Findings } from './findings';
 import { Sampling } from './sampling';
 import { EvidencePanel } from './evidence-panel';
 import { ReportTab } from './report-tab';
-import { setAuditStatus } from '@/lib/actions/admin';
+import { setAuditStatus, signOffAudit, revokeSignOff } from '@/lib/actions/admin';
 import { AUDIT_STATUS_LABELS } from '@/lib/audit/scoring';
 import type {
   Audit,
@@ -124,6 +124,12 @@ export function Workbench(props: Props) {
         ) : null}
       </div>
 
+      <SignOffControl
+        auditId={props.audit.id}
+        signedOffAt={props.audit.signed_off_at}
+        signOffName={props.audit.sign_off_name}
+      />
+
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="checklist" active={tab === 'checklist'} onClick={() => setTab('checklist')}>
@@ -179,6 +185,79 @@ export function Workbench(props: Props) {
           <ReportTab audit={props.audit} reports={props.reports} organisationName={props.organisationName} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/**
+ * Auditor sign-off — the human approval that must happen before a report can
+ * reach a client. Records who + when + a professional statement, stamped on the
+ * PDF. Delivery is blocked until this is done.
+ */
+function SignOffControl({
+  auditId,
+  signedOffAt,
+  signOffName,
+}: {
+  auditId: string;
+  signedOffAt: string | null;
+  signOffName: string | null;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  function doSignOff() {
+    setErr(null);
+    start(async () => {
+      const r = await signOffAudit(auditId);
+      if (!r.ok) setErr(r.error ?? 'Could not sign off.');
+      else router.refresh();
+    });
+  }
+  function doRevoke() {
+    setErr(null);
+    start(async () => {
+      const r = await revokeSignOff(auditId);
+      if (!r.ok) setErr(r.error ?? 'Could not withdraw sign-off.');
+      else router.refresh();
+    });
+  }
+
+  if (signedOffAt) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-2.5">
+        <p className="text-sm text-green-300">
+          ✓ Signed off by {signOffName ?? 'auditor'} on{' '}
+          {new Date(signedOffAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+          <span className="ml-1 text-xs text-muted-foreground"> — approved for delivery.</span>
+        </p>
+        <button
+          type="button"
+          onClick={doRevoke}
+          disabled={pending}
+          className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
+        >
+          Withdraw sign-off
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-2.5">
+      <p className="text-sm text-amber-300">
+        Not signed off. Review the audit, then formally approve it — delivery is blocked until you do.
+        {err ? <span className="ml-1 text-red-400">{err}</span> : null}
+      </p>
+      <button
+        type="button"
+        onClick={doSignOff}
+        disabled={pending}
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+      >
+        {pending ? 'Signing…' : 'Review & sign off'}
+      </button>
     </div>
   );
 }

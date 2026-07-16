@@ -174,6 +174,10 @@ export interface Audit {
   started_at: string;
   due_at: string | null;
   delivered_at: string | null;
+  signed_off_by: string | null;
+  signed_off_at: string | null;
+  sign_off_name: string | null;
+  sign_off_statement: string | null;
   created_at: string;
   updated_at: string;
 }

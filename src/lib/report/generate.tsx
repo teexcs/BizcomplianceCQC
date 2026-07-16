@@ -165,7 +165,17 @@ export interface ReportData {
   evidenceProof?: EvidenceProof | null;
   /** Policy claims cross-referenced to filled-in records — execution proof. */
   executionProof?: ExecutionProof | null;
+  /** Named auditor sign-off, stamped on the report. */
+  signOff?: { name: string; at: string; statement: string | null } | null;
 }
+
+/**
+ * The assessment framework version this report was produced against. Bump this
+ * when the regulatory basis materially changes so every report states exactly
+ * what it was assessed against — a consistency and defensibility guarantee.
+ */
+export const ASSESSMENT_FRAMEWORK_VERSION =
+  'CQC Single Assessment Framework · HSCA 2008 (Regulated Activities) Regs 2014 · assessed 2026 rev. A';
 
 export interface ReportFileSample {
   fileName: string;
@@ -176,7 +186,7 @@ export interface ReportFileSample {
 }
 
 function ReportDoc({ data }: { data: ReportData }) {
-  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples, evidenceProof, executionProof } =
+  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples, evidenceProof, executionProof, signOff } =
     data;
   const samples = (fileSamples ?? []).filter((s) => s.verdict !== 'unset');
   const areaName = new Map(libraryAreas.map((a) => [cleanText(a.code), cleanText(a.name, a.code)]));
@@ -570,6 +580,27 @@ function ReportDoc({ data }: { data: ReportData }) {
               ) : null}
             </View>
           ))}
+
+        {signOff ? (
+          <View style={{ borderWidth: 1, borderColor: COLORS.line, borderRadius: 6, padding: 12, marginTop: 8, marginBottom: 4 }} wrap={false}>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10, marginBottom: 3 }}>
+              Reviewed &amp; approved by {cleanText(signOff.name)}
+            </Text>
+            <Text style={{ fontSize: 8.5, color: COLORS.muted, marginBottom: signOff.statement ? 4 : 0 }}>
+              Signed off on{' '}
+              {new Date(signOff.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </Text>
+            {signOff.statement ? (
+              <Text style={{ fontSize: 8.5, color: '#333a47', lineHeight: 1.5 }}>
+                “{cleanText(signOff.statement)}”
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        <Text style={{ fontSize: 8, color: COLORS.muted, marginBottom: 6 }}>
+          Assessment framework: {ASSESSMENT_FRAMEWORK_VERSION}
+        </Text>
 
         <Text style={styles.h2}>Basis, limitations & disclaimer</Text>
         <Text style={[styles.para, { fontSize: 8.5, color: COLORS.muted }]}>

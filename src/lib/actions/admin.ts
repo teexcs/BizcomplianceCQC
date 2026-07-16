@@ -471,6 +471,49 @@ async function recalculateAudit(auditId: string): Promise<number | null> {
  * checklist. A 0/100 report with nothing assessed is a genuine "0 legal/CQC
  * documents reviewed" state, not a stub: catch it before it reaches a client.
  */
+const DEFAULT_SIGNOFF_STATEMENT =
+  'I have reviewed the engine analysis and the evidence supplied, and I approve this report as an accurate, independent readiness assessment based on the documents provided.';
+
+/**
+ * Auditor sign-off — a named human formally approves the audit before it can
+ * reach a client. Records who, when, the display name stamped on the report,
+ * and the professional statement. This is what makes each report a considered
+ * professional judgement, not an automated output.
+ */
+export async function signOffAudit(
+  auditId: string,
+  statement?: string,
+): Promise<ActionResult> {
+  const ctx = await requireAdminSession();
+  const admin = createAdminClient();
+  const name = ctx.profile.full_name?.trim() || 'BizCompliance CQC auditor';
+  const { error } = await admin
+    .from('audits')
+    .update({
+      signed_off_by: ctx.userId,
+      signed_off_at: new Date().toISOString(),
+      sign_off_name: name,
+      sign_off_statement: (statement?.trim() || DEFAULT_SIGNOFF_STATEMENT).slice(0, 1000),
+    })
+    .eq('id', auditId);
+  if (error) return fail('Could not record sign-off.');
+  revalidatePath(`/admin/audits/${auditId}`);
+  return { ok: true };
+}
+
+/** Withdraw a prior sign-off (e.g. to make further changes before delivery). */
+export async function revokeSignOff(auditId: string): Promise<ActionResult> {
+  await requireAdminSession();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('audits')
+    .update({ signed_off_by: null, signed_off_at: null, sign_off_name: null, sign_off_statement: null })
+    .eq('id', auditId);
+  if (error) return fail('Could not withdraw sign-off.');
+  revalidatePath(`/admin/audits/${auditId}`);
+  return { ok: true };
+}
+
 async function checkAuditReadyToDeliver(auditId: string): Promise<{ ready: boolean; reason?: string }> {
   const admin = createAdminClient();
   const { count: total } = await admin
@@ -501,6 +544,19 @@ async function checkAuditReadyToDeliver(auditId: string): Promise<{ ready: boole
     return {
       ready: false,
       reason: 'No compliance areas have a RAG rating yet — apply suggested RAGs or set them manually before delivering.',
+    };
+  }
+  // Final gate: a named auditor must have signed off. This is what puts a
+  // human professional judgement behind every delivered report.
+  const { data: signoff } = await admin
+    .from('audits')
+    .select('signed_off_at')
+    .eq('id', auditId)
+    .single<{ signed_off_at: string | null }>();
+  if (!signoff?.signed_off_at) {
+    return {
+      ready: false,
+      reason: 'Not signed off yet — review the audit and formally approve it (Sign off) before delivering to the client.',
     };
   }
   return { ready: true };
@@ -784,6 +840,13 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     fileSamples,
     evidenceProof,
     executionProof,
+    signOff: audit.signed_off_at
+      ? {
+          name: audit.sign_off_name ?? 'BizCompliance CQC auditor',
+          at: audit.signed_off_at,
+          statement: audit.sign_off_statement,
+        }
+      : null,
   };
 
   let pdf: Buffer;
