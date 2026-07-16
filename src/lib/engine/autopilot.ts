@@ -82,20 +82,57 @@ export async function runAutopilotApply(auditId: string): Promise<ApplyStats> {
     item.status = item.suggested_status;
   }
 
-  // 2. RAG every area from the applied checklist.
+  // 2. RAG every area from the applied checklist AND fill its notes with what
+  //    the engine found — so a non-missing area shows WHERE the evidence is,
+  //    not a blank RAG. evidence_sighted lists the documents/quotes that prove
+  //    the area; findings lists what is still missing or out of date.
   const { data: areas } = await admin
     .from('audit_areas')
-    .select('id, area_code, rag')
+    .select('id, area_code, rag, evidence_sighted, findings')
     .eq('audit_id', auditId);
   let ragsSet = 0;
-  await runPooled((areas as Pick<AuditArea, 'id' | 'area_code' | 'rag'>[]) ?? [], 8, async (area) => {
-    const areaItems = allItems.filter((i) => i.area_code === area.area_code);
-    const rag = suggestAreaRag(areaItems);
-    if (rag !== 'unset' && rag !== area.rag) {
-      ragsSet++;
-      await admin.from('audit_areas').update({ rag }).eq('id', area.id);
-    }
-  });
+  await runPooled(
+    (areas as Pick<AuditArea, 'id' | 'area_code' | 'rag' | 'evidence_sighted' | 'findings'>[]) ?? [],
+    8,
+    async (area) => {
+      const areaItems = allItems.filter((i) => i.area_code === area.area_code);
+      const rag = suggestAreaRag(areaItems);
+
+      const present = areaItems.filter((i) => i.status === 'present');
+      const missing = areaItems.filter((i) => i.status === 'missing');
+      const stale = areaItems.filter((i) => i.status === 'out_of_date');
+
+      // Evidence sighted: the AI's own quoted reasons for the present items
+      // (these carry "Evidence found in … (line N)"), so you see exactly what
+      // it found and where. Falls back to the item title.
+      const sighted = present
+        .slice(0, 8)
+        .map((i) => {
+          const reason = (i.note ?? i.suggestion_reason ?? '').trim();
+          return reason ? `• ${i.title}: ${reason}` : `• ${i.title}`;
+        })
+        .join('\n');
+      const gaps = [
+        ...missing.map((i) => `• Missing: ${i.title}`),
+        ...stale.map((i) => `• Out of date: ${i.title}`),
+      ]
+        .slice(0, 10)
+        .join('\n');
+
+      const patch: Record<string, unknown> = {};
+      if (rag !== 'unset' && rag !== area.rag) {
+        patch.rag = rag;
+        ragsSet++;
+      }
+      // Only auto-fill notes the founder hasn't already written.
+      if (sighted && !area.evidence_sighted) patch.evidence_sighted = sighted;
+      if (gaps && !area.findings) patch.findings = gaps;
+
+      if (Object.keys(patch).length > 0) {
+        await admin.from('audit_areas').update(patch).eq('id', area.id);
+      }
+    },
+  );
 
   // 3. Draft findings from every detection source, all through the findings
   //    library so the wording is consistent and regulator-grade. Deduped by
