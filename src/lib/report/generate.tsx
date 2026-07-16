@@ -224,6 +224,8 @@ function ReportDoc({ data }: { data: ReportData }) {
     return out;
   })();
 
+  const scoreExplain = breakdown ? explainScore(breakdown) : null;
+
   const issued = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',
@@ -286,25 +288,22 @@ function ReportDoc({ data }: { data: ReportData }) {
           </View>
         ) : null}
 
-        {breakdown ? (
-          (() => {
-            const ex = explainScore(breakdown);
-            return (
-              <View style={{ marginBottom: 14 }}>
-                <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: COLORS.ink, marginBottom: 3 }}>
-                  {cleanText(ex.headline)}
-                </Text>
-                <Text style={{ fontSize: 8.5, color: COLORS.muted, lineHeight: 1.5 }}>
-                  {ex.parts.map((p) => `${cleanText(p.label)}: ${cleanText(p.detail)} → ${p.points} pts`).join('  ·  ')}
-                </Text>
-                {ex.drags.length > 0 ? (
-                  <Text style={{ fontSize: 8.5, color: '#333a47', lineHeight: 1.5, marginTop: 2 }}>
-                    Holding the score back: {ex.drags.map((d) => cleanText(d)).join('; ')}.
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })()
+        {scoreExplain ? (
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: COLORS.ink, marginBottom: 3 }}>
+              {cleanText(scoreExplain.headline)}
+            </Text>
+            <Text style={{ fontSize: 8.5, color: COLORS.muted, lineHeight: 1.5 }}>
+              {scoreExplain.parts
+                .map((p) => `${cleanText(p.label)}: ${cleanText(p.detail)} = ${p.points} pts`)
+                .join('  ·  ')}
+            </Text>
+            {scoreExplain.drags.length > 0 ? (
+              <Text style={{ fontSize: 8.5, color: '#333a47', lineHeight: 1.5, marginTop: 2 }}>
+                Holding the score back: {scoreExplain.drags.map((d) => cleanText(d)).join('; ')}.
+              </Text>
+            ) : null}
+          </View>
         ) : null}
 
         {audit.summary ? (
