@@ -222,7 +222,23 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
                     </div>
                   ) : null}
 
-                  {/* Not-found gaps */}
+                  {/* Situational prompts — only if the service does the thing */}
+                  {area.situational.length > 0 ? (
+                    <div className="rounded-lg bg-muted/30 px-3 py-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Consider if applicable to your service
+                      </p>
+                      <ul className="mt-1 space-y-0.5 pl-4">
+                        {area.situational.map((n) => (
+                          <li key={n.label} className="text-[11px] text-muted-foreground">
+                            {n.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {/* Firm not-found gaps */}
                   {area.notFound.length > 0 ? (
                     <div className="rounded-lg bg-red-500/5 px-3 py-2">
                       <p className="flex items-center gap-1.5 text-xs font-medium text-[hsl(4,70%,55%)]">

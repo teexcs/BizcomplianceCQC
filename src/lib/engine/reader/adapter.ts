@@ -4,6 +4,7 @@ import type { AuditItem, ItemStatus } from '@/types/database';
 import type { AutopilotStats } from '@/lib/engine/autopilot';
 import { verifyEvidence, type VerifiableFile, type VerificationResult } from '@/lib/audit/verification';
 import { gradeSignal, type SignalConfidence } from '@/lib/audit/signal-confidence';
+import { partitionGaps } from '@/lib/audit/signal-context';
 // Verbatim copy of the standalone policy-evidence-reader engine. These modules
 // are byte-identical to ~/Downloads/policy-evidence-reader and must not be
 // edited here — treat them as a vendored, tested dependency. Typed via the
@@ -496,8 +497,11 @@ export interface AreaProof {
   areaName: string;
   /** Signals evidenced with a real quote from the uploaded documents. */
   proven: ProvenSignal[];
-  /** Signals the CQC expects but that were NOT found in any uploaded doc. */
+  /** Firm gaps: expected signals genuinely not found (not situational). */
   notFound: { label: string; weight: 'critical' | 'expected' }[];
+  /** Situational prompts: only apply if the service does the relevant thing. */
+  situational: { label: string; weight: 'critical' | 'expected' }[];
+  /** Critical signals proven / total, EXCLUDING situational ones. */
   criticalProven: number;
   criticalTotal: number;
   /** Files that contributed evidence to this area. */
@@ -546,6 +550,11 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
     const area = e.area_code ?? cls.area;
     if (!area) continue;
     const result = analyzeDocument(doc, cls);
+    // Records (matrices, MAR charts, logs, registers) are execution evidence,
+    // NOT policy documents — they may legitimately PROVE a signal but must never
+    // be marked down for lacking policy language. So we take their positive
+    // matches but ignore their "not found" gaps.
+    const { isRecord } = isRecordDocument(e.file_name, doc.lines.join('\n'));
 
     let agg = byArea.get(area);
     if (!agg) {
@@ -567,7 +576,7 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
         agg.proven.set(s.label, existing);
         // If it was previously only in notFound (from another doc), it's proven now.
         agg.notFound.delete(s.label);
-      } else if (!s.found && !agg.proven.has(s.label)) {
+      } else if (!isRecord && !s.found && !agg.proven.has(s.label)) {
         agg.notFound.set(s.label, { label: s.label, weight: s.weight });
       }
     }
@@ -583,9 +592,12 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
       ...p,
       confidence: gradeSignal(p.citations),
     }));
-    const notFound = [...agg.notFound.values()];
+    // Route situational (service-type-specific) gaps out of the firm count so a
+    // standard provider isn't marked down for practices it doesn't do.
+    const { firm, situational } = partitionGaps([...agg.notFound.values()]);
     const criticalProven = proven.filter((p) => p.weight === 'critical').length;
-    const criticalTotal = criticalProven + notFound.filter((n) => n.weight === 'critical').length;
+    // Critical total counts proven + FIRM critical gaps only (not situational).
+    const criticalTotal = criticalProven + firm.filter((n) => n.weight === 'critical').length;
     totalProven += proven.length;
     totalCriticalProven += criticalProven;
     totalCritical += criticalTotal;
@@ -593,7 +605,8 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
       areaCode,
       areaName: AREAS_MAP[areaCode] ?? `Area ${areaCode}`,
       proven,
-      notFound,
+      notFound: firm,
+      situational,
       criticalProven,
       criticalTotal,
       files: [...agg.files],
