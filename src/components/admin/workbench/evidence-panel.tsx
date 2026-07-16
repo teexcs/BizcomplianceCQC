@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { ShieldCheck, Quote, XCircle, CheckCircle2, AlertTriangle, FileText } from 'lucide-react';
 import { getEvidenceTrust, getAuditDiff, type AuditDiff } from '@/lib/actions/engine';
 import { buildBenchmark, VERDICT_LABEL } from '@/lib/audit/benchmark';
-import type { EvidenceProof, ExecutionProof, Contradiction } from '@/lib/engine/reader/adapter';
+import type { EvidenceProof, ExecutionProof, Contradiction, WrongServiceFlag } from '@/lib/engine/reader/adapter';
 
 /**
  * Evidence & execution — the founder's trust surface. Shows, per CQC area:
@@ -20,6 +20,7 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
   const [proof, setProof] = useState<EvidenceProof | null>(null);
   const [execution, setExecution] = useState<ExecutionProof | null>(null);
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  const [wrongService, setWrongService] = useState<WrongServiceFlag[]>([]);
   const [diff, setDiff] = useState<AuditDiff | null>(null);
 
   function load() {
@@ -33,6 +34,7 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
       setProof(res.proof ?? null);
       setExecution(res.execution ?? null);
       setContradictions(res.contradictions ?? []);
+      setWrongService(res.wrongService ?? []);
       setDiff(diffRes.ok ? diffRes.diff ?? null : null);
     });
   }
@@ -138,6 +140,26 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
         </section>
       ) : null}
 
+      {wrongService.length > 0 ? (
+        <section className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-[hsl(4,70%,55%)]">
+            <AlertTriangle size={15} aria-hidden="true" /> Possible wrong-service documents ({wrongService.length})
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            These look like a different framework (e.g. children&apos;s safeguarding) — do not credit
+            them for adult domiciliary care without checking.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {wrongService.map((w) => (
+              <li key={w.fileName} className="text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">{w.fileName}</span> (area {w.areaCode}):
+                &ldquo;{w.quote}&rdquo; (line {w.line})
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {contradictions.length > 0 ? (
         <section className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
           <p className="flex items-center gap-1.5 text-sm font-semibold text-[hsl(4,70%,55%)]">
@@ -181,6 +203,18 @@ export function EvidencePanel({ auditId }: { auditId: string }) {
                 </header>
 
                 <div className="space-y-3 px-4 py-3">
+                  {/* Anti-gaming: keyword-list documents flagged loudly */}
+                  {area.integrityWarnings.length > 0 ? (
+                    <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+                      {area.integrityWarnings.map((w) => (
+                        <p key={w.fileName} className="text-[11px] leading-relaxed text-[hsl(4,70%,55%)]">
+                          <AlertTriangle size={11} className="mr-1 -mt-0.5 inline" aria-hidden="true" />
+                          <span className="font-semibold">{w.fileName}:</span> {w.reason}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+
                   {/* Proven signals with quotes */}
                   {area.proven.length > 0 ? (
                     <div className="space-y-2">

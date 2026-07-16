@@ -5,6 +5,7 @@ import type { AutopilotStats } from '@/lib/engine/autopilot';
 import { verifyEvidence, type VerifiableFile, type VerificationResult } from '@/lib/audit/verification';
 import { gradeSignal, type SignalConfidence } from '@/lib/audit/signal-confidence';
 import { partitionGaps } from '@/lib/audit/signal-context';
+import { assessIntegrity } from '@/lib/audit/document-integrity';
 // Verbatim copy of the standalone policy-evidence-reader engine. These modules
 // are byte-identical to ~/Downloads/policy-evidence-reader and must not be
 // edited here — treat them as a vendored, tested dependency. Typed via the
@@ -506,6 +507,8 @@ export interface AreaProof {
   criticalTotal: number;
   /** Files that contributed evidence to this area. */
   files: string[];
+  /** Anti-gaming warnings: files that match terms but aren't real policies. */
+  integrityWarnings: { fileName: string; reason: string }[];
 }
 
 export interface EvidenceProof {
@@ -540,6 +543,7 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
     proven: Map<string, Omit<ProvenSignal, 'confidence'>>;
     notFound: Map<string, { label: string; weight: 'critical' | 'expected' }>;
     files: Set<string>;
+    integrityWarnings: { fileName: string; reason: string }[];
   }
   const byArea = new Map<string, Agg>();
 
@@ -550,19 +554,36 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
     const area = e.area_code ?? cls.area;
     if (!area) continue;
     const result = analyzeDocument(doc, cls);
+    const fullText = doc.lines.join('\n');
     // Records (matrices, MAR charts, logs, registers) are execution evidence,
     // NOT policy documents — they may legitimately PROVE a signal but must never
     // be marked down for lacking policy language. So we take their positive
     // matches but ignore their "not found" gaps.
-    const { isRecord } = isRecordDocument(e.file_name, doc.lines.join('\n'));
+    const { isRecord } = isRecordDocument(e.file_name, fullText);
+
+    // Anti-gaming: a document that fires many signals but reads like a keyword
+    // list is not a real policy. Do NOT credit its signals; flag it instead.
+    const signalsFired = result.signals.filter((s) => s.found).length;
+    const integrity = isRecord ? { level: 'ok' as const, reason: null } : assessIntegrity(fullText, signalsFired);
+    const gamed = integrity.level === 'not_a_policy';
 
     let agg = byArea.get(area);
     if (!agg) {
-      agg = { proven: new Map(), notFound: new Map(), files: new Set() };
+      agg = { proven: new Map(), notFound: new Map(), files: new Set(), integrityWarnings: [] };
       byArea.set(area, agg);
+    }
+    if (gamed && integrity.reason) {
+      agg.integrityWarnings.push({ fileName: e.file_name, reason: integrity.reason });
     }
 
     for (const s of result.signals) {
+      // Gamed documents don't get to prove anything — their matches are hollow.
+      if (gamed) {
+        if (!s.found && !isRecord && !agg.proven.has(s.label)) {
+          agg.notFound.set(s.label, { label: s.label, weight: s.weight });
+        }
+        continue;
+      }
       if (s.found && s.citations.length > 0) {
         agg.files.add(e.file_name);
         const existing = agg.proven.get(s.label) ?? { label: s.label, weight: s.weight, citations: [] };
@@ -610,6 +631,7 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
       criticalProven,
       criticalTotal,
       files: [...agg.files],
+      integrityWarnings: agg.integrityWarnings,
     });
   }
 
@@ -693,22 +715,67 @@ export async function detectContradictions(orgId: string): Promise<Contradiction
 
   const contradictions: Contradiction[] = [];
   for (const [topic, entries] of bySubject) {
-    // A contradiction requires ≥2 DISTINCT cadence values from ≥2 DIFFERENT files.
+    // A contradiction is ≥2 DISTINCT cadence values for the same subject —
+    // whether across two documents OR within a single one (a policy that says
+    // both "monthly" and "quarterly" is just as much a problem at inspection).
     const distinctValues = new Set(entries.map((x) => x.value));
-    const distinctFiles = new Set(entries.map((x) => x.fileName));
-    if (distinctValues.size >= 2 && distinctFiles.size >= 2) {
+    if (distinctValues.size >= 2) {
       // Keep one representative statement per distinct value.
       const seen = new Set<string>();
       const statements = entries.filter((x) => {
-        const key = `${x.value}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
+        if (seen.has(x.value)) return false;
+        seen.add(x.value);
         return true;
       });
       contradictions.push({ topic, statements });
     }
   }
   return contradictions;
+}
+
+// Markers of the CHILDREN'S safeguarding framework — if these appear in a doc
+// filed under ADULT safeguarding (area 02/03), it's likely the wrong policy.
+const WRONG_SERVICE_MARKERS =
+  /\b(keeping children safe in education|kcsie|working together to safeguard children|section 47|child protection|lado|ofsted|early years|eyfs|designated teacher|children act 1989|children's? home)\b/i;
+
+export interface WrongServiceFlag {
+  fileName: string;
+  areaCode: string;
+  quote: string;
+  line: number;
+}
+
+/**
+ * Flag documents that look like the WRONG service framework — e.g. a children's
+ * safeguarding policy uploaded to an adult domiciliary audit. These fire some
+ * signals but are the wrong basis and must not be credited without review.
+ */
+export async function detectWrongService(orgId: string): Promise<WrongServiceFlag[]> {
+  const admin = createAdminClient();
+  const { data: evidence } = await admin
+    .from('evidence_files')
+    .select('id, file_name, area_code, extract_status, extracted_text, scan_status, lifecycle_state')
+    .eq('org_id', orgId);
+  const rows = (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
+
+  const flags: WrongServiceFlag[] = [];
+  for (const e of rows) {
+    const doc = toIngestedDoc(e);
+    if (!doc.readable) continue;
+    const cls = classify(doc);
+    const area = e.area_code ?? cls.area;
+    // Only relevant where the doc claims a care-quality area.
+    if (!area) continue;
+    for (let i = 0; i < doc.lines.length; i++) {
+      const m = doc.lines[i].match(WRONG_SERVICE_MARKERS);
+      if (m) {
+        const q = doc.lines[i].replace(/\s+/g, ' ').trim();
+        flags.push({ fileName: e.file_name, areaCode: area, quote: q.length > 180 ? `${q.slice(0, 180)}…` : q, line: i + 1 });
+        break; // one flag per file is enough
+      }
+    }
+  }
+  return flags;
 }
 
 /* ---------- Execution proof: is the policy actually being DONE? ---------- */

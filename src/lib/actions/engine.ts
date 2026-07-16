@@ -15,9 +15,11 @@ import {
   getEvidenceProof,
   getExecutionProof,
   detectContradictions,
+  detectWrongService,
   type EvidenceProof,
   type ExecutionProof,
   type Contradiction,
+  type WrongServiceFlag,
 } from '@/lib/engine/reader/adapter';
 import { sweepPendingExtractionsForOrg } from '@/lib/evidence/process';
 import type { VerificationResult } from '@/lib/audit/verification';
@@ -102,6 +104,7 @@ export async function getEvidenceTrust(auditId: string): Promise<{
   proof?: EvidenceProof;
   execution?: ExecutionProof;
   contradictions?: Contradiction[];
+  wrongService?: WrongServiceFlag[];
   error?: string;
 }> {
   await requireAdminSession();
@@ -113,12 +116,13 @@ export async function getEvidenceTrust(auditId: string): Promise<{
     .single<{ org_id: string }>();
   if (error || !audit) return { ok: false, error: 'Audit not found.' };
   try {
-    const [proof, execution, contradictions] = await Promise.all([
+    const [proof, execution, contradictions, wrongService] = await Promise.all([
       getEvidenceProof(audit.org_id),
       getExecutionProof(audit.org_id),
       detectContradictions(audit.org_id),
+      detectWrongService(audit.org_id),
     ]);
-    return { ok: true, proof, execution, contradictions };
+    return { ok: true, proof, execution, contradictions, wrongService };
   } catch (e) {
     console.error('[engine] evidence trust failed', e);
     return { ok: false, error: 'Could not build the evidence view — try again.' };
