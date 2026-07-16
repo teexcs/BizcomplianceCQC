@@ -15,6 +15,7 @@ import {
   type ScoreBreakdown,
 } from '@/lib/audit/scoring';
 import type { VerificationResult } from '@/lib/audit/verification';
+import type { EvidenceProof, ExecutionProof } from '@/lib/engine/reader/adapter';
 
 const COLORS = {
   ink: '#111722',
@@ -160,6 +161,10 @@ export interface ReportData {
   verification?: VerificationResult | null;
   /** Files sampled in depth by the auditor, with verdict + findings. */
   fileSamples?: ReportFileSample[];
+  /** Per-area proven signals (quoted) + not-found gaps — the trust surface. */
+  evidenceProof?: EvidenceProof | null;
+  /** Policy claims cross-referenced to filled-in records — execution proof. */
+  executionProof?: ExecutionProof | null;
 }
 
 export interface ReportFileSample {
@@ -171,7 +176,7 @@ export interface ReportFileSample {
 }
 
 function ReportDoc({ data }: { data: ReportData }) {
-  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples } =
+  const { organisation, areas, libraryAreas, findings, score, audit, domainScores, breakdown, verification, fileSamples, evidenceProof, executionProof } =
     data;
   const samples = (fileSamples ?? []).filter((s) => s.verdict !== 'unset');
   const areaName = new Map(libraryAreas.map((a) => [cleanText(a.code), cleanText(a.name, a.code)]));
@@ -395,6 +400,71 @@ function ReportDoc({ data }: { data: ReportData }) {
                     {a.verified}/{a.items.length} verified
                     {a.criticalGaps > 0 ? ` · ${a.criticalGaps} essential gap${a.criticalGaps === 1 ? '' : 's'}` : ''}
                   </Text>
+                </View>
+              ))}
+          </View>
+        ) : null}
+
+        {evidenceProof && evidenceProof.totalProven > 0 ? (
+          <View>
+            <Text style={styles.h2}>Evidence found in your documents</Text>
+            <Text style={styles.para}>
+              {evidenceProof.totalProven} CQC evidence point
+              {evidenceProof.totalProven === 1 ? ' was' : 's were'} confirmed against your own
+              documents ({evidenceProof.totalCriticalProven} of {evidenceProof.totalCritical} critical).
+              Each is a direct quote from the file you supplied — nothing here is inferred.
+            </Text>
+            {evidenceProof.areas
+              .filter((a) => a.proven.length > 0)
+              .slice(0, 12)
+              .map((a) => (
+                <View key={a.areaCode} style={{ marginBottom: 6 }} wrap={false}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
+                    {cleanText(a.areaCode)} {cleanText(a.areaName)} — {a.criticalProven}/{a.criticalTotal} critical evidenced
+                  </Text>
+                  {a.proven.slice(0, 3).map((p) => (
+                    <Text key={p.label} style={{ fontSize: 8.5, color: COLORS.muted, marginTop: 1 }}>
+                      ✓ {cleanText(p.label)}
+                      {p.citations[0]
+                        ? ` — “${cleanText(p.citations[0].quote).slice(0, 90)}” (line ${p.citations[0].line})`
+                        : ''}
+                    </Text>
+                  ))}
+                  {a.notFound.filter((n) => n.weight === 'critical').length > 0 ? (
+                    <Text style={{ fontSize: 8.5, color: COLORS.red, marginTop: 1 }}>
+                      Not found: {a.notFound.filter((n) => n.weight === 'critical').slice(0, 3).map((n) => cleanText(n.label)).join('; ')}
+                    </Text>
+                  ) : null}
+                </View>
+              ))}
+          </View>
+        ) : null}
+
+        {executionProof && executionProof.totalClaims > 0 ? (
+          <View>
+            <Text style={styles.h2}>Is your policy being carried out?</Text>
+            <Text style={styles.para}>
+              Where you supplied records (registers, matrices, logs), we checked whether your policy
+              commitments are backed by real entries. {executionProof.totalConfirmed} of{' '}
+              {executionProof.totalClaims} checked commitments were confirmed by a dated or signed
+              record. The remainder are best confirmed by sampling actual records.
+            </Text>
+            {executionProof.areas
+              .filter((a) => a.claims.some((c) => c.state === 'confirmed'))
+              .slice(0, 8)
+              .map((a) => (
+                <View key={a.areaCode} style={{ marginBottom: 5 }} wrap={false}>
+                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
+                    {cleanText(a.areaCode)} {cleanText(a.areaName)} — {a.confirmed}/{a.total} confirmed in practice
+                  </Text>
+                  {a.claims
+                    .filter((c) => c.state === 'confirmed' && c.evidence)
+                    .slice(0, 3)
+                    .map((c, i) => (
+                      <Text key={i} style={{ fontSize: 8.5, color: COLORS.muted, marginTop: 1 }}>
+                        ✓ {cleanText(c.claim)} — “{cleanText(c.evidence!.quote).slice(0, 80)}” ({cleanText(c.evidence!.fileName).slice(0, 30)}, line {c.evidence!.line})
+                      </Text>
+                    ))}
                 </View>
               ))}
           </View>

@@ -11,7 +11,7 @@ import {
   suggestAreaRag,
 } from '@/lib/audit/scoring';
 import { renderAuditReportPdf, renderFallbackAuditReportPdf } from '@/lib/report/generate';
-import { verifyOrgEvidence } from '@/lib/engine/reader/adapter';
+import { verifyOrgEvidence, getEvidenceProof, getExecutionProof } from '@/lib/engine/reader/adapter';
 import { sendEmail } from '@/lib/email/send';
 import {
   documentsIssuedEmail,
@@ -744,6 +744,19 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     console.error('[report] verification failed, continuing without it', e);
   }
 
+  // Quoted evidence proof + execution proof — the trust surface in the client
+  // report. Non-fatal: the report still generates if these fail.
+  let evidenceProof = null;
+  let executionProof = null;
+  try {
+    [evidenceProof, executionProof] = await Promise.all([
+      getEvidenceProof(audit.org_id),
+      getExecutionProof(audit.org_id),
+    ]);
+  } catch (e) {
+    console.error('[report] evidence proof failed, continuing without it', e);
+  }
+
   // File-sampling reviews, joined to their file names for the report's
   // file-sampling section (only reviewed samples reach the PDF).
   const { data: samples } = await admin
@@ -769,6 +782,8 @@ export async function generateReport(auditId: string): Promise<ActionResult> {
     breakdown,
     verification,
     fileSamples,
+    evidenceProof,
+    executionProof,
   };
 
   let pdf: Buffer;
