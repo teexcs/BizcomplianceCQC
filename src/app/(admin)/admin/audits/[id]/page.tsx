@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getAuditWorkbench } from '@/lib/data/admin';
+import { getActionPlanAdmin } from '@/lib/data/action-plan';
 import { Workbench } from '@/components/admin/workbench/workbench';
 import { DeleteAuditButton } from '@/components/admin/delete-audit-button';
 import { formatDate } from '@/lib/utils';
@@ -69,6 +70,8 @@ export default async function AuditWorkbenchPage({
         evidence={bundle.evidence}
         fileSamples={bundle.fileSamples}
         reports={bundle.reports}
+        orgId={organisation.id}
+        actionPlan={await getActionPlanAdmin(organisation.id)}
       />
     </div>
   );

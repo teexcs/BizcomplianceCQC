@@ -15,6 +15,41 @@ export interface ActionResult {
   id?: string;
 }
 
+const actionToggleSchema = z.object({
+  actionKey: z.string().min(3).max(200),
+  done: z.boolean(),
+});
+
+/**
+ * Tick an Action Plan item done (or un-tick it). Upserts the per-org progress
+ * row keyed by the stable action key. Derived items keep their state across
+ * recomputes because the key is stable.
+ */
+export async function toggleActionDone(
+  input: z.infer<typeof actionToggleSchema>,
+): Promise<ActionResult> {
+  const parsed = actionToggleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Invalid action.' };
+  const ctx = await requireOrgSession();
+  const supabase = await createClient();
+
+  const { error } = await supabase.from('action_states').upsert(
+    {
+      org_id: ctx.org.id,
+      action_key: parsed.data.actionKey,
+      done: parsed.data.done,
+      done_at: parsed.data.done ? new Date().toISOString() : null,
+      done_by: parsed.data.done ? ctx.userId : null,
+    },
+    { onConflict: 'org_id,action_key' },
+  );
+  if (error) return { ok: false, error: 'Could not update the task.' };
+
+  revalidatePath('/dashboard/action-plan');
+  revalidatePath('/dashboard');
+  return { ok: true };
+}
+
 const requestSchema = z.object({
   type: z.string().min(2).max(80),
   priority: z.enum(['low', 'medium', 'high']),

@@ -19,8 +19,6 @@ const ALLOWED_TYPES = new Map<string, string>([
   ['application/pdf', 'pdf'],
   ['application/msword', 'doc'],
   ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
-  ['application/vnd.ms-excel', 'xls'],
-  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'],
   ['text/csv', 'csv'],
   ['image/png', 'png'],
   ['image/jpeg', 'jpg'],
@@ -31,8 +29,6 @@ const EXT_TO_MIME = new Map<string, string>([
   ['pdf', 'application/pdf'],
   ['doc', 'application/msword'],
   ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-  ['xls', 'application/vnd.ms-excel'],
-  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
   ['csv', 'text/csv'],
   ['png', 'image/png'],
   ['jpg', 'image/jpeg'],
@@ -108,7 +104,7 @@ async function handleUpload(request: Request) {
   const contentType = ALLOWED_TYPES.has(file.type) ? file.type : EXT_TO_MIME.get(nameExt);
   if (!contentType) {
     return NextResponse.json(
-      { error: 'Unsupported file type. Allowed: PDF, Word, Excel, CSV, PNG, JPG.' },
+      { error: 'Unsupported file type. Allowed: PDF, Word, CSV, PNG, JPG.' },
       { status: 400 },
     );
   }

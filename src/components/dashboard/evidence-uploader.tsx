@@ -8,7 +8,7 @@ import { BoxedDropdown } from '@/components/site/boxed-dropdown';
 import { startClientAudit } from '@/lib/actions/client';
 import type { EvidenceFile } from '@/types/database';
 
-const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.webp';
+const ACCEPT = '.pdf,.doc,.docx,.csv,.png,.jpg,.jpeg,.webp';
 const ACCEPT_EXT = ACCEPT.split(',').map((e) => e.trim().toLowerCase());
 
 /** True when a file has one of the accepted extensions — used to filter folders. */
@@ -464,11 +464,11 @@ export function EvidenceUploader({
         </div>
 
         <p className="mt-3 text-xs text-muted-foreground">
-          PDF, Word, Excel, CSV or images · up to 25MB each · no queue limit
+          PDF, Word, CSV or images · up to 25MB each · no queue limit
         </p>
         {skipped > 0 ? (
           <p className="mt-1 text-xs text-amber-700">
-            {skipped} unsupported file{skipped === 1 ? '' : 's'} skipped (only PDF, Word, Excel, CSV
+            {skipped} unsupported file{skipped === 1 ? '' : 's'} skipped (only PDF, Word, CSV
             and images are accepted).
           </p>
         ) : null}

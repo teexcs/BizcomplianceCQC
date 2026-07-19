@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test:evidence": "node scripts/evidence-engine-selftest.mjs",
     "seed:library": "node scripts/seed-library.mjs"
   },
   "dependencies": {
@@ -19,8 +20,6 @@
     "@radix-ui/react-tabs": "^1.1.1",
     "@radix-ui/react-toast": "^1.2.2",
     "@react-pdf/renderer": "^4.5.1",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.6.1",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.0",
     "class-variance-authority": "^0.7.0",
@@ -37,9 +36,7 @@
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "tesseract.js": "^5.1.1",
-    "three": "^0.184.0",
-    "unpdf": "^0.12.2",
-    "xlsx": "^0.18.5",
+    "unpdf": "^1.6.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -47,7 +44,6 @@
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@types/three": "^0.184.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.14.0",
     "eslint-config-next": "^15.0.3",

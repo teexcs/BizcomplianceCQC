@@ -57,20 +57,25 @@ export function classify(doc) {
   const nameToks = new Set(tokens(doc.fileName));
   let best = null;
   let bestScore = 0;
+  let bestHits = 0;
   for (const { item, toks } of MANIFEST_TOKENS) {
     if (toks.length === 0) continue;
     let hits = 0;
     for (const t of toks) if (nameToks.has(t)) hits++;
     const score = hits / toks.length;
-    if (score > bestScore) {
+    if (score > bestScore || (score === bestScore && hits > bestHits)) {
       bestScore = score;
+      bestHits = hits;
       best = item;
     }
   }
-  if (best && bestScore >= 0.6) {
+  // Do not let one shared generic word ("safe", "consent", "audit") become a
+  // high-confidence library match. If only one distinctive term overlaps, fall
+  // through to content signals unless the filename carries an explicit ref.
+  if (best && bestScore >= 0.6 && bestHits >= 2) {
     return decorate(best, 'high', `Filename matches "${best.title}" (${Math.round(bestScore * 100)}% of title terms)`);
   }
-  if (best && bestScore >= 0.34) {
+  if (best && bestScore >= 0.34 && bestHits >= 2) {
     return decorate(best, 'medium', `Filename partially matches "${best.title}" (${Math.round(bestScore * 100)}% of title terms) — confirm`);
   }
 
@@ -119,16 +124,24 @@ function decorate(item, confidence, reason) {
 function dominantAreaFromContent(lines) {
   const text = lines.join('\n');
   let bestArea = null;
-  let bestHits = 0;
+  let bestScore = 0;
+  let runnerUpScore = 0;
   for (const [area, signals] of Object.entries(AREA_SIGNALS)) {
-    let hits = 0;
+    let score = 0;
     for (const sig of signals) {
-      if (sig.patterns.some((p) => p.test(text))) hits++;
+      if (sig.patterns.some((p) => p.test(text))) {
+        score += sig.weight === 'critical' ? 2 : 1;
+      }
     }
-    if (hits > bestHits) {
-      bestHits = hits;
+    if (score > bestScore) {
+      runnerUpScore = bestScore;
+      bestScore = score;
       bestArea = area;
+    } else if (score > runnerUpScore) {
+      runnerUpScore = score;
     }
   }
-  return bestHits >= 2 ? bestArea : null;
+  // Require a real cluster of signals and a clear lead over the next-best area.
+  // This avoids classifying a document from one or two generic shared terms.
+  return bestScore >= 4 && bestScore - runnerUpScore >= 2 ? bestArea : null;
 }

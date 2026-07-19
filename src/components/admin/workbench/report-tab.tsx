@@ -6,7 +6,7 @@ import { FileText, Send, RefreshCw, ClipboardCheck, Copy } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { generateReport, publishReport, setAuditSummary } from '@/lib/actions/admin';
+import { publishReport, setAuditSummary } from '@/lib/actions/admin';
 import { getAuditAnalysis } from '@/lib/actions/engine';
 import { formatDate } from '@/lib/utils';
 import type { Audit, Report } from '@/types/database';
@@ -50,7 +50,13 @@ export function ReportTab({ audit, reports, organisationName }: Props) {
   function run(action: () => Promise<{ ok: boolean; error?: string }>, okText: string) {
     setMessage(null);
     startTransition(async () => {
-      const result = await action();
+      let result: { ok: boolean; error?: string };
+      try {
+        result = await action();
+      } catch (error) {
+        console.error('[admin] workbench action failed', error);
+        result = { ok: false, error: 'The request failed. Refresh the page and try again.' };
+      }
       setMessage(
         result.ok
           ? { tone: 'ok', text: okText }
@@ -58,6 +64,23 @@ export function ReportTab({ audit, reports, organisationName }: Props) {
       );
       router.refresh();
     });
+  }
+
+  async function generateReportViaApi(): Promise<{ ok: boolean; error?: string }> {
+    const response = await fetch(`/api/admin/audits/${audit.id}/reports/generate`, {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+    });
+    const result = (await response.json().catch(() => null)) as
+      | { ok?: boolean; error?: string }
+      | null;
+    if (!response.ok || !result?.ok) {
+      return {
+        ok: false,
+        error: result?.error ?? 'Could not generate the report.',
+      };
+    }
+    return { ok: true };
   }
 
   const latest = reports[0] ?? null;
@@ -139,7 +162,7 @@ export function ReportTab({ audit, reports, organisationName }: Props) {
             type="button"
             disabled={busy}
             onClick={() =>
-              run(() => generateReport(audit.id), 'Report generated — review the PDF below.')
+              run(generateReportViaApi, 'Report generated — review the PDF below.')
             }
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[hsl(220,45%,55%)] to-[hsl(220,50%,38%)] text-[#111722] px-4 py-2.5 text-sm font-semibold hover:opacity-95 transition-opacity disabled:opacity-50"
           >

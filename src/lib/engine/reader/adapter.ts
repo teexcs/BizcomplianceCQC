@@ -141,6 +141,12 @@ function refFromName(name: string): string | null {
   return m ? `${m[1]}-${m[2]}` : null;
 }
 
+function resolveEvidenceArea(storedArea: string | null | undefined, cls: Classification | null): string | null {
+  // Content/title classification wins over client folder choice. Folder choice
+  // is a fallback for weak records that cannot be classified from their text.
+  return cls?.area ?? storedArea ?? null;
+}
+
 interface ReaderSuggestion {
   status: ItemStatus;
   evidenceId: string;
@@ -558,8 +564,8 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
 
   const rows = (evidence as (EvidenceRow & { area_code: string | null })[]) ?? [];
 
-  // Analyse each readable doc; group the proven signals by the area the doc
-  // belongs to (stored area first, else the reader's classification).
+  // Analyse each readable doc; group the proven signals by the area the document
+  // itself evidences. Client/admin folder choice is only a fallback.
   interface Agg {
     proven: Map<string, Omit<ProvenSignal, 'confidence'>>;
     notFound: Map<string, { label: string; weight: 'critical' | 'expected' }>;
@@ -572,7 +578,7 @@ export async function getEvidenceProof(orgId: string): Promise<EvidenceProof> {
     const doc = toIngestedDoc(e);
     if (!doc.readable) continue;
     const cls = classify(doc);
-    const area = e.area_code ?? cls.area;
+    const area = resolveEvidenceArea(e.area_code, cls);
     if (!area) continue;
     const result = analyzeDocument(doc, cls);
     const fullText = doc.lines.join('\n');
@@ -784,7 +790,7 @@ export async function detectWrongService(orgId: string): Promise<WrongServiceFla
     const doc = toIngestedDoc(e);
     if (!doc.readable) continue;
     const cls = classify(doc);
-    const area = e.area_code ?? cls.area;
+    const area = resolveEvidenceArea(e.area_code, cls);
     // Only relevant where the doc claims a care-quality area.
     if (!area) continue;
     for (let i = 0; i < doc.lines.length; i++) {
@@ -898,7 +904,7 @@ export async function getExecutionProof(orgId: string): Promise<ExecutionProof> 
     const doc = toIngestedDoc(e);
     if (!doc.readable) continue;
     const cls = classify(doc);
-    const area = e.area_code ?? cls.area;
+    const area = resolveEvidenceArea(e.area_code, cls);
     if (!area) continue;
     const text = doc.lines.join('\n');
     const { isRecord, markers } = isRecordDocument(e.file_name, text);
@@ -1075,9 +1081,8 @@ export function analyzeEvidenceByRef(
  * the coverage/suggest paths use to assign a CQC area, then hand the reduced
  * file list to verifyEvidence so policy-vs-record gaps are surfaced.
  *
- * Area is taken from the persisted `area_code` when present (admin/auto-sort has
- * decided it), otherwise from the reader's own classification — so verification
- * agrees with what the rest of the pipeline believes about each file.
+ * Area is taken from the document classification when readable, falling back to
+ * persisted `area_code` only when the reader cannot classify it.
  */
 export async function verifyOrgEvidence(orgId: string): Promise<VerificationResult> {
   const admin = createAdminClient();
@@ -1092,12 +1097,8 @@ export async function verifyOrgEvidence(orgId: string): Promise<VerificationResu
   const files: VerifiableFile[] = rows.map((e) => {
     const doc = toIngestedDoc(e);
     const text = doc.readable ? doc.lines.join('\n') : '';
-    // Prefer the stored area; fall back to the reader's classification.
-    let areaCode = e.area_code ?? null;
-    if (!areaCode && doc.readable) {
-      const cls = classify(doc);
-      areaCode = cls.area ?? null;
-    }
+    const cls = doc.readable ? classify(doc) : null;
+    const areaCode = resolveEvidenceArea(e.area_code, cls);
     return { id: e.id, fileName: e.file_name, text, areaCode };
   });
 
@@ -1142,8 +1143,8 @@ export async function buildAuditAnalysis(
   const files: VerifiableFile[] = rows.map((e) => {
     const doc = toIngestedDoc(e);
     const text = doc.readable ? doc.lines.join('\n') : '';
-    let areaCode = e.area_code ?? null;
-    if (!areaCode && doc.readable) areaCode = classify(doc).area ?? null;
+    const cls = doc.readable ? classify(doc) : null;
+    const areaCode = resolveEvidenceArea(e.area_code, cls);
     return { id: e.id, fileName: e.file_name, text, areaCode };
   });
   const verification = verifyEvidence(files);

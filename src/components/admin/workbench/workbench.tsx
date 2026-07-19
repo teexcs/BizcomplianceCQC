@@ -10,7 +10,9 @@ import { SafSheet } from './saf-sheet';
 import { Findings } from './findings';
 import { Sampling } from './sampling';
 import { EvidencePanel } from './evidence-panel';
+import { AdminActionPlan } from './admin-action-plan';
 import { ReportTab } from './report-tab';
+import type { ActionPlan } from '@/lib/data/action-plan';
 import { setAuditStatus, signOffAudit, revokeSignOff } from '@/lib/actions/admin';
 import { AUDIT_STATUS_LABELS } from '@/lib/audit/scoring';
 import type {
@@ -39,6 +41,8 @@ interface Props {
   fileSamples: FileSample[];
   reports: Report[];
   organisationName: string;
+  orgId: string;
+  actionPlan: ActionPlan;
 }
 
 const STATUSES: AuditStatus[] = [
@@ -149,6 +153,9 @@ export function Workbench(props: Props) {
           <TabsTrigger value="sampling" active={tab === 'sampling'} onClick={() => setTab('sampling')}>
             Submitted files ({props.evidence.length})
           </TabsTrigger>
+          <TabsTrigger value="action" active={tab === 'action'} onClick={() => setTab('action')}>
+            Action Plan ({props.actionPlan.done.length}/{props.actionPlan.items.length})
+          </TabsTrigger>
           <TabsTrigger value="report" active={tab === 'report'} onClick={() => setTab('report')}>
             Report ({props.reports.length})
           </TabsTrigger>
@@ -180,6 +187,9 @@ export function Workbench(props: Props) {
             evidence={props.evidence}
             samples={props.fileSamples}
           />
+        </TabsContent>
+        <TabsContent value="action" activeValue={tab} className="mt-5">
+          <AdminActionPlan orgId={props.orgId} plan={props.actionPlan} />
         </TabsContent>
         <TabsContent value="report" activeValue={tab} className="mt-5">
           <ReportTab audit={props.audit} reports={props.reports} organisationName={props.organisationName} />

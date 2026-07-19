@@ -12,6 +12,7 @@ import {
   LogOut,
   UploadCloud,
   ClipboardCheck,
+  ListChecks,
   Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,6 +55,7 @@ export function DashboardSidebar({
     { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Documents', href: '/dashboard/documents', icon: FolderLock },
     { label: 'Evidence Vault', href: '/dashboard/evidence', icon: UploadCloud },
+    { label: 'Action Plan', href: '/dashboard/action-plan', icon: ListChecks },
     { label: 'Compliance Calendar', href: '/dashboard/calendar', icon: CalendarDays },
     { label: 'Requests', href: '/dashboard/requests', icon: MessagesSquare },
     { label: 'SAF Prep', href: '/dashboard/saf-prep', icon: ClipboardCheck, entitled: user.safPrep },

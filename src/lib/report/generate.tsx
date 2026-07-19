@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cream,
   },
   scoreNum: { fontSize: 26, fontFamily: 'Helvetica-Bold' },
-  scoreLabel: { fontSize: 8, color: COLORS.muted, marginTop: 4, textTransform: 'uppercase' },
+  scoreLabel: { fontSize: 7.25, color: COLORS.muted, marginTop: 4, textTransform: 'uppercase' },
   h2: {
     fontSize: 13,
     fontFamily: 'Helvetica-Bold',
@@ -136,6 +136,12 @@ function cleanRag(value: unknown): RagStatus {
   return value === 'green' || value === 'amber' || value === 'red' || value === 'unset'
     ? value
     : 'unset';
+}
+
+function findingPriorityLabel(value: unknown): string {
+  const raw = cleanText(value);
+  if (!raw) return 'Priority';
+  return FINDING_PRIORITY_LABELS[raw] ?? `${raw.charAt(0).toUpperCase()}${raw.slice(1)} priority`;
 }
 
 function ReportFooter({ organisationName }: { organisationName: string }) {
@@ -261,7 +267,7 @@ function ReportDoc({ data }: { data: ReportData }) {
           </View>
           <View style={styles.scoreBox}>
             <Text style={[styles.scoreNum, { color: COLORS.amber }]}>{counts.amber}</Text>
-            <Text style={styles.scoreLabel}>Needs improvement</Text>
+            <Text style={styles.scoreLabel}>Amber areas</Text>
           </View>
           <View style={styles.scoreBox}>
             <Text style={[styles.scoreNum, { color: COLORS.red }]}>{counts.red}</Text>
@@ -346,13 +352,13 @@ function ReportDoc({ data }: { data: ReportData }) {
                 </View>
                 <Text style={[styles.rag, { color: COLORS.ink, width: 80 }]}>
                   {d.score != null ? `${d.score.toFixed(1)}/10` : 'Not assessed'}
-                  {d.priorityFails > 0 ? `  (${d.priorityFails}★ fail${d.priorityFails === 1 ? '' : 's'})` : ''}
+                  {d.priorityFails > 0 ? `  (${d.priorityFails} priority fail${d.priorityFails === 1 ? '' : 's'})` : ''}
                 </Text>
               </View>
             ))}
             <Text style={{ fontSize: 8, color: COLORS.muted, marginTop: 4, marginBottom: 6 }}>
-              Scored from the {breakdown?.saf.total ?? 68}-question SAF interview. ★ marks
-              priority questions — the rapid-triage questions an inspection turns on.
+              Scored from the {breakdown?.saf.total ?? 68}-question SAF interview. Priority
+              questions are the rapid-triage questions an inspection turns on.
             </Text>
           </View>
         ) : null}
@@ -439,15 +445,15 @@ function ReportDoc({ data }: { data: ReportData }) {
               .filter((a) => a.proven.length > 0)
               .slice(0, 12)
               .map((a) => (
-                <View key={a.areaCode} style={{ marginBottom: 6 }} wrap={false}>
+                <View key={a.areaCode} style={[styles.findingCard, { padding: 9, marginBottom: 7 }]} wrap={false}>
                   <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
-                    {cleanText(a.areaCode)} {cleanText(a.areaName)} — {a.criticalProven}/{a.criticalTotal} critical evidenced
+                    {cleanText(a.areaCode)} {cleanText(a.areaName)} - {a.criticalProven}/{a.criticalTotal} critical evidenced
                   </Text>
                   {a.proven.slice(0, 3).map((p) => (
                     <Text key={p.label} style={{ fontSize: 8.5, color: COLORS.muted, marginTop: 1 }}>
-                      ✓ {cleanText(p.label)}
+                      Evidence: {cleanText(p.label)}
                       {p.citations[0]
-                        ? ` — “${cleanText(p.citations[0].quote).slice(0, 90)}” (line ${p.citations[0].line})`
+                        ? ` - "${cleanText(p.citations[0].quote).slice(0, 90)}" (line ${p.citations[0].line})`
                         : ''}
                     </Text>
                   ))}
@@ -474,16 +480,16 @@ function ReportDoc({ data }: { data: ReportData }) {
               .filter((a) => a.claims.some((c) => c.state === 'confirmed'))
               .slice(0, 8)
               .map((a) => (
-                <View key={a.areaCode} style={{ marginBottom: 5 }} wrap={false}>
+                <View key={a.areaCode} style={[styles.findingCard, { padding: 9, marginBottom: 7 }]} wrap={false}>
                   <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
-                    {cleanText(a.areaCode)} {cleanText(a.areaName)} — {a.confirmed}/{a.total} confirmed in practice
+                    {cleanText(a.areaCode)} {cleanText(a.areaName)} - {a.confirmed}/{a.total} confirmed in practice
                   </Text>
                   {a.claims
                     .filter((c) => c.state === 'confirmed' && c.evidence)
                     .slice(0, 3)
                     .map((c, i) => (
                       <Text key={i} style={{ fontSize: 8.5, color: COLORS.muted, marginTop: 1 }}>
-                        ✓ {cleanText(c.claim)} — “{cleanText(c.evidence!.quote).slice(0, 80)}” ({cleanText(c.evidence!.fileName).slice(0, 30)}, line {c.evidence!.line})
+                        Confirmed: {cleanText(c.claim)} - "{cleanText(c.evidence!.quote).slice(0, 80)}" ({cleanText(c.evidence!.fileName).slice(0, 30)}, line {c.evidence!.line})
                       </Text>
                     ))}
                 </View>
@@ -552,7 +558,7 @@ function ReportDoc({ data }: { data: ReportData }) {
                   {cleanText(f.title, 'Untitled finding')}
                 </Text>
                 <Text style={styles.findingPriority}>
-                  {FINDING_PRIORITY_LABELS[f.priority] ?? cleanText(f.priority)}
+                  {findingPriorityLabel(f.priority)}
                 </Text>
               </View>
               {f.area_code ? (
@@ -637,7 +643,11 @@ export async function renderAuditReportPdf(data: ReportData): Promise<Buffer> {
   return renderToBuffer(<ReportDoc data={data} />);
 }
 
-function FallbackReportDoc({ data }: { data: ReportData }) {
+export async function renderFallbackAuditReportPdf(data: ReportData): Promise<Buffer> {
+  return Buffer.from(buildPlainPdf(buildFallbackReportLines(data)), 'binary');
+}
+
+function buildFallbackReportLines(data: ReportData): string[] {
   const organisationName = cleanText(data.organisation.name, 'Client');
   const issued = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
@@ -652,114 +662,157 @@ function FallbackReportDoc({ data }: { data: ReportData }) {
   );
   const openFindings = data.findings.filter((f) => cleanText(f.status) === 'open');
   const samples = (data.fileSamples ?? []).filter((s) => cleanText(s.verdict) !== 'unset');
+  const lines: string[] = [
+    'BizCompliance',
+    'CQC Readiness Audit',
+    `${organisationName} - ${issued}`,
+    '',
+    `Readiness score: ${data.score}/100`,
+  ];
 
-  return (
-    <Document
-      title={`CQC Readiness Audit - ${organisationName}`}
-      author="BizCompliance"
-      subject="CQC readiness audit report"
-    >
-      <Page size="A4" style={styles.page}>
-        <View style={styles.headerBar}>
-          <Text style={styles.brand}>BizCompliance</Text>
-          <Text style={styles.brandSub}>CQC compliance, handled properly</Text>
-          <Text style={styles.title}>CQC Readiness Audit</Text>
-          <Text style={styles.subtitle}>
-            {organisationName} - {issued}
-          </Text>
-        </View>
+  if (data.audit.summary) lines.push('', 'Executive summary', cleanText(data.audit.summary));
+  if (data.breakdown?.legalWarning) {
+    lines.push('', 'Legally-required gaps', cleanText(data.breakdown.legalWarning));
+  }
 
-        <Text style={styles.h2}>Readiness position</Text>
-        <Text style={styles.para}>Readiness score: {data.score}/100</Text>
-        {data.audit.summary ? (
-          <Text style={styles.para}>{cleanText(data.audit.summary)}</Text>
-        ) : (
-          <Text style={styles.para}>
-            This report summarises the audit areas, findings and sampled evidence reviewed by
-            BizCompliance.
-          </Text>
-        )}
-        {data.breakdown?.legalWarning ? (
-          <Text style={[styles.findingDetail, { color: COLORS.red }]}>
-            {cleanText(data.breakdown.legalWarning)}
-          </Text>
-        ) : null}
+  lines.push('', 'Compliance area assessment');
+  if (areas.length === 0) {
+    lines.push('No audit areas were available for this report.');
+  } else {
+    for (const area of areas) {
+      const code = cleanText(area.area_code);
+      lines.push(`${code} ${areaName.get(code) ?? ''} - ${RAG_LABEL[cleanRag(area.rag)]}`);
+      if (area.evidence_sighted) lines.push(`Evidence sighted: ${cleanText(area.evidence_sighted)}`);
+      if (area.findings) lines.push(`Findings: ${cleanText(area.findings)}`);
+      if (area.action) lines.push(`Action: ${cleanText(area.action)}`);
+    }
+  }
 
-        <Text style={styles.h2}>Compliance area assessment</Text>
-        {areas.length > 0 ? (
-          areas.map((area) => {
-            const rag = cleanRag(area.rag);
-            return (
-              <View key={area.id} style={styles.areaRow} wrap={false}>
-                <Text style={styles.areaName}>
-                  {cleanText(area.area_code)} {areaName.get(cleanText(area.area_code)) ?? ''}
-                </Text>
-                <Text style={[styles.rag, { color: RAG_COLOR[rag] }]}>{RAG_LABEL[rag]}</Text>
-              </View>
-            );
-          })
-        ) : (
-          <Text style={styles.para}>No audit areas were available for this report.</Text>
-        )}
+  lines.push('', 'Priority findings');
+  if (openFindings.length === 0) {
+    lines.push('No open findings were recorded.');
+  } else {
+    for (const finding of openFindings) {
+      lines.push(cleanText(finding.title, 'Untitled finding'));
+      if (finding.area_code) lines.push(`Area: ${cleanText(finding.area_code)}`);
+      if (finding.detail) lines.push(cleanText(finding.detail));
+      if (finding.recommendation) {
+        lines.push(`Recommendation: ${cleanText(finding.recommendation)}`);
+      }
+    }
+  }
 
-        <Text style={styles.h2}>Priority findings</Text>
-        {openFindings.length > 0 ? (
-          openFindings.map((finding) => (
-            <View key={finding.id} style={styles.findingCard} wrap={false}>
-              <Text style={styles.findingTitle}>
-                {cleanText(finding.title, 'Untitled finding')}
-              </Text>
-              {finding.area_code ? (
-                <Text style={styles.findingDetail}>Area: {cleanText(finding.area_code)}</Text>
-              ) : null}
-              {finding.detail ? (
-                <Text style={styles.findingDetail}>{cleanText(finding.detail)}</Text>
-              ) : null}
-              {finding.recommendation ? (
-                <Text style={styles.findingDetail}>
-                  Recommendation: {cleanText(finding.recommendation)}
-                </Text>
-              ) : null}
-            </View>
-          ))
-        ) : (
-          <Text style={styles.para}>No open findings were recorded.</Text>
-        )}
-      </Page>
+  lines.push('', 'File sampling');
+  if (samples.length === 0) {
+    lines.push('No reviewed file samples were recorded.');
+  } else {
+    for (const sample of samples) {
+      const verdict =
+        SAMPLE_VERDICT_LABEL[sample.verdict] ?? cleanText(sample.verdict, 'Reviewed');
+      lines.push(`${cleanText(sample.fileName, 'Sampled file')} - ${verdict}`);
+      if (sample.areaCode) lines.push(`Area: ${cleanText(sample.areaCode)}`);
+      if (sample.findings) lines.push(cleanText(sample.findings));
+    }
+  }
 
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.h2}>File sampling</Text>
-        {samples.length > 0 ? (
-          samples.map((sample, index) => (
-            <View key={`${cleanText(sample.fileName, 'sample')}-${index}`} style={styles.findingCard} wrap={false}>
-              <Text style={styles.findingTitle}>{cleanText(sample.fileName, 'Sampled file')}</Text>
-              <Text style={styles.findingDetail}>
-                Verdict: {SAMPLE_VERDICT_LABEL[cleanText(sample.verdict) as ReportFileSample['verdict']] ?? cleanText(sample.verdict)}
-              </Text>
-              {sample.areaCode ? (
-                <Text style={styles.findingDetail}>Area: {cleanText(sample.areaCode)}</Text>
-              ) : null}
-              {sample.findings ? (
-                <Text style={styles.findingDetail}>{cleanText(sample.findings)}</Text>
-              ) : null}
-            </View>
-          ))
-        ) : (
-          <Text style={styles.para}>No reviewed file samples were recorded.</Text>
-        )}
-
-        <Text style={styles.h2}>Scope and limitations</Text>
-        <Text style={[styles.para, { fontSize: 8.5, color: COLORS.muted }]}>
-          This is an independent documentation and inspection-readiness review. BizCompliance is
-          not the Care Quality Commission and is not affiliated with it. This review is not an
-          inspection and does not guarantee any inspection rating or outcome. Findings are based
-          only on the documents and records supplied for review.
-        </Text>
-      </Page>
-    </Document>
+  lines.push(
+    '',
+    'Scope and limitations',
+    'This is an independent documentation and inspection-readiness review. BizCompliance is not the Care Quality Commission and is not affiliated with it. This review is not an inspection and does not guarantee any inspection rating or outcome. Findings are based only on the documents and records supplied for review.',
   );
+
+  return lines;
 }
 
-export async function renderFallbackAuditReportPdf(data: ReportData): Promise<Buffer> {
-  return renderToBuffer(<FallbackReportDoc data={data} />);
+function buildPlainPdf(lines: string[]): string {
+  const pageLines = wrapPdfLines(lines, 88);
+  const pages: string[][] = [];
+  for (let i = 0; i < pageLines.length; i += 48) pages.push(pageLines.slice(i, i + 48));
+  if (pages.length === 0) pages.push(['BizCompliance CQC Readiness Audit']);
+
+  const objects: string[] = [];
+  const addObject = (body: string) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const catalogId = addObject('<< /Type /Catalog /Pages 2 0 R >>');
+  const pagesId = addObject('');
+  const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageIds: number[] = [];
+
+  for (const page of pages) {
+    const content = [
+      'BT',
+      '/F1 10 Tf',
+      '50 790 Td',
+      '14 TL',
+      ...page.map((line, index) => `${index === 0 ? '' : 'T*'} (${escapePdfText(line)}) Tj`),
+      'ET',
+    ].join('\n');
+    const contentId = addObject(`<< /Length ${Buffer.byteLength(content, 'binary')} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(
+      `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
+    );
+    pageIds.push(pageId);
+  }
+
+  objects[pagesId - 1] =
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+
+  const chunks = ['%PDF-1.4\n'];
+  const offsets: number[] = [0];
+  for (let i = 0; i < objects.length; i++) {
+    offsets.push(Buffer.byteLength(chunks.join(''), 'binary'));
+    chunks.push(`${i + 1} 0 obj\n${objects[i]}\nendobj\n`);
+  }
+  const xrefOffset = Buffer.byteLength(chunks.join(''), 'binary');
+  chunks.push(`xref\n0 ${objects.length + 1}\n`);
+  chunks.push('0000000000 65535 f \n');
+  for (let i = 1; i < offsets.length; i++) {
+    chunks.push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
+  }
+  chunks.push(
+    `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`,
+  );
+  return chunks.join('');
+}
+
+function wrapPdfLines(lines: string[], maxLength: number): string[] {
+  const out: string[] = [];
+  for (const rawLine of lines) {
+    const normalised = normalisePdfText(rawLine);
+    if (!normalised) {
+      out.push('');
+      continue;
+    }
+    const words = normalised.split(/\s+/);
+    let current = '';
+    for (const word of words) {
+      const next = current ? `${current} ${word}` : word;
+      if (next.length > maxLength && current) {
+        out.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    }
+    if (current) out.push(current);
+  }
+  return out;
+}
+
+function normalisePdfText(value: string): string {
+  return value
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[—–]/g, '-')
+    .replace(/[✓★•]/g, '-')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapePdfText(value: string): string {
+  return normalisePdfText(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }

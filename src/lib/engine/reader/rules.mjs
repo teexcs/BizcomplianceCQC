@@ -37,7 +37,7 @@ export const AREA_SIGNALS = {
     { id: 'reg13', label: 'Regulation 13 (safeguarding) referenced', weight: 'critical', patterns: [/regulation\s*13\b|reg\.?\s*13\b/i] },
     { id: 'types-of-abuse', label: 'Types/categories of abuse defined', weight: 'critical', patterns: [/types? of abuse|physical abuse|financial abuse|psychological abuse|sexual abuse|neglect|domestic abuse|modern slavery|self.neglect/i] },
     { id: 'la-referral', label: 'Local authority referral route / s.42 enquiries', weight: 'critical', patterns: [/local authority|safeguarding (team|board|adults board|referral)|section\s*42|s\.?42/i] },
-    { id: 'safeguarding-lead', label: 'Named/designated safeguarding lead', weight: 'critical', patterns: [/safeguarding lead|designated safeguarding|nominated (person|individual|lead)/i] },
+    { id: 'safeguarding-lead', label: 'Named/designated safeguarding lead', weight: 'critical', patterns: [/safeguarding lead|designated safeguarding|designated lead for safeguarding|\bdsl\b|nominated (person|individual|lead)/i] },
     { id: 'whistleblowing', label: 'Whistleblowing route (PIDA) available', weight: 'critical', patterns: [/whistle-?blow|public interest disclosure/i] },
     { id: 'care-act', label: 'Care Act 2014 referenced', weight: 'expected', patterns: [/care act 2014/i] },
     { id: 'immediate-action', label: 'Immediate protection / emergency action steps', weight: 'expected', patterns: [/immediate(ly)? (action|report|protect)|999|emergency services|preserve evidence/i] },
@@ -54,7 +54,7 @@ export const AREA_SIGNALS = {
   '03': [
     { id: 'reg11', label: 'Regulation 11 (need for consent) referenced', weight: 'critical', patterns: [/regulation\s*11\b|reg\.?\s*11\b/i] },
     { id: 'mca', label: 'Mental Capacity Act 2005 referenced', weight: 'critical', patterns: [/mental capacity act|mca\b|2005 act/i] },
-    { id: 'capacity-assessment', label: 'Two-stage capacity assessment process', weight: 'critical', patterns: [/capacity assessment|assess(ing|ment of)? .{0,20}capacity|two.stage test/i] },
+    { id: 'capacity-assessment', label: 'Two-stage capacity assessment process', weight: 'critical', patterns: [/capacity assessment|assess(ing|ment of)? .{0,20}capacity|two.stage test|two stage test|functional test|diagnostic test/i] },
     { id: 'best-interests', label: 'Best-interests decision process & checklist', weight: 'critical', patterns: [/best.interests?/i] },
     { id: 'capacity-presumption', label: 'Presumption of capacity stated', weight: 'critical', patterns: [/presum(e|ption) .{0,20}capacity|assumed? to have capacity/i] },
     { id: 'unwise-decisions', label: 'Right to make unwise decisions recognised', weight: 'expected', patterns: [/unwise decision/i] },
@@ -101,7 +101,7 @@ export const AREA_SIGNALS = {
   /* ======================= 06 Medicines Management ======================= */
   '06': [
     { id: 'reg12g', label: 'Reg 12(2)(g) proper & safe management of medicines', weight: 'critical', patterns: [/12\s*\(\s*2\s*\)\s*\(\s*g\s*\)|proper and safe management of medicines|safe management of medicines|regulation\s*12\b/i] },
-    { id: 'mar', label: 'MAR charts required and audited', weight: 'critical', patterns: [/\bmar\b|medicines? administration record|medication administration record/i] },
+    { id: 'mar', label: 'MAR charts required and audited', weight: 'critical', patterns: [/\bmar\b|medicines? administration record|medicine administration record|medication administration record/i] },
     { id: 'nice-ng67', label: 'NICE NG67 / SC1 guidance referenced', weight: 'expected', patterns: [/ng\s?67|sc\s?1\b|nice (guideline|guidance)/i] },
     { id: 'six-rights', label: 'Rights of administration (right person/med/dose/route/time)', weight: 'expected', patterns: [/right (person|medicine|dose|route|time)|6 rights|six rights|5 rights/i] },
     { id: 'prn', label: 'PRN protocols required', weight: 'critical', patterns: [/\bprn\b|when.required medicine/i] },
@@ -198,11 +198,11 @@ export const AREA_SIGNALS = {
   '12': [
     { id: 'reg19', label: 'Regulation 19 (fit and proper persons employed)', weight: 'critical', patterns: [/regulation\s*19\b|reg\.?\s*19\b|fit and proper person/i] },
     { id: 'schedule3-checks', label: 'Schedule 3 information requirements listed', weight: 'critical', patterns: [/schedule\s*3/i] },
-    { id: 'dbs', label: 'Enhanced DBS with barred-list checks', weight: 'critical', patterns: [/\bdbs\b|disclosure and barring|barred list/i] },
-    { id: 'references', label: 'References obtained and verified', weight: 'critical', patterns: [/references?/i] },
+    { id: 'dbs', label: 'Enhanced DBS with barred-list checks', weight: 'critical', patterns: [/\bdbs\b|disclosure and barring|criminal record (check|certificate|disclosure)|enhanced disclosure|barred list/i] },
+    { id: 'references', label: 'References obtained and verified', weight: 'critical', patterns: [/(employment|professional|written|two)\s+references?|references?.{0,30}(obtained|verified|checked|requested)/i] },
     { id: 'employment-history', label: 'Full employment history with gaps explored', weight: 'critical', patterns: [/employment history|gaps? in employment/i] },
-    { id: 'identity-checks', label: 'Proof of identity verified', weight: 'critical', patterns: [/proof of identity|identity check|photographic id/i] },
-    { id: 'right-to-work', label: 'Right-to-work checks (incl. sponsorship where used)', weight: 'critical', patterns: [/right to work|sponsorship|visa/i] },
+    { id: 'identity-checks', label: 'Proof of identity verified', weight: 'critical', patterns: [/proof of identity|identity check|photographic id|passport|driving licence/i] },
+    { id: 'right-to-work', label: 'Right-to-work checks (incl. sponsorship where used)', weight: 'critical', patterns: [/right to work|share code|sponsorship|visa/i] },
     { id: 'health-declaration', label: 'Health / reasonable adjustments assessment (Reg 19(1)(c))', weight: 'expected', patterns: [/health (declaration|questionnaire)|reasonable adjustments/i] },
     { id: 'dbs-risk-pending', label: 'Risk assessment where staff start pending DBS', weight: 'critical', patterns: [/pending|await(ing)? (dbs|clearance)|risk assessment .{0,40}dbs|dbs .{0,40}risk assessment/i] },
     { id: 'dbs-renewal', label: 'DBS renewal / update service position stated', weight: 'expected', patterns: [/update service|renew(al)? .{0,20}dbs|dbs .{0,20}(renew|every|3 year)/i] },
